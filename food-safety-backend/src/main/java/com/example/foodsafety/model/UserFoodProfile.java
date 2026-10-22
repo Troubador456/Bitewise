@@ -6,7 +6,7 @@ import java.util.Set;
 public record UserFoodProfile(
         @NotBlank String id,
         @NotBlank String name,
-        Set<Allergen> allergies,
+        Set<String> allergies,
         Set<DietaryRestriction> restrictions
 ) {
     public UserFoodProfile {

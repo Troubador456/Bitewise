@@ -9,19 +9,6 @@ import java.util.stream.Collectors;
 
 @Service
 public class FoodAnalysisService {
-    // Conservative keyword rules. Ingredient text is not a substitute for a verified label or manufacturer confirmation.
-    private static final Map<Allergen, List<String>> ALLERGEN_TERMS = Map.of(
-        Allergen.PEANUT, List.of("peanut", "groundnut", "arachis oil"),
-        Allergen.TREE_NUT, List.of("almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia", "brazil nut", "pine nut"),
-        Allergen.MILK, List.of("milk", "whey", "casein", "lactalbumin", "butter", "cream", "cheese", "yogurt", "ghee"),
-        Allergen.EGG, List.of("egg", "albumin", "ovalbumin", "mayonnaise"),
-        Allergen.WHEAT, List.of("wheat", "durum", "semolina", "spelt", "farina", "bulgur", "seitan"),
-        Allergen.SOY, List.of("soy", "soya", "tofu", "tempeh", "edamame", "soy lecithin"),
-        Allergen.FISH, List.of("salmon", "tuna", "cod", "anchovy", "sardine", "fish sauce", "tilapia"),
-        Allergen.SHELLFISH, List.of("shrimp", "prawn", "crab", "lobster", "crayfish", "clam", "mussel", "oyster", "scallop"),
-        Allergen.SESAME, List.of("sesame", "tahini", "benne")
-    );
-
     private static final Map<DietaryRestriction, List<String>> RESTRICTION_TERMS = Map.of(
         DietaryRestriction.VEGAN, List.of("beef", "pork", "chicken", "turkey", "lamb", "fish", "shrimp", "gelatin", "honey", "milk", "whey", "casein", "butter", "cheese", "egg", "albumin"),
         DietaryRestriction.VEGETARIAN, List.of("beef", "pork", "chicken", "turkey", "lamb", "fish", "shrimp", "gelatin", "anchovy", "fish sauce"),
@@ -42,22 +29,18 @@ public class FoodAnalysisService {
 
         List<String> detectedAllergens = new ArrayList<>();
         List<String> matchedIngredients = new ArrayList<>();
-        for (Allergen allergen : Allergen.values()) {
-            List<String> terms = ALLERGEN_TERMS.getOrDefault(allergen, List.of());
-            List<String> matches = findMatches(text, terms);
-            if (!matches.isEmpty()) {
-                detectedAllergens.add(allergen.name());
-                matchedIngredients.addAll(matches.stream().map(m -> allergen.name() + ": " + m).toList());
-            }
-        }
-
         List<String> conflicts = new ArrayList<>();
         if (profile != null) {
-            for (Allergen allergen : profile.allergies()) {
-                List<String> terms = ALLERGEN_TERMS.getOrDefault(allergen, List.of());
-                List<String> matches = findMatches(text, terms);
+            for (String allergen : profile.allergies()) {
+                String term = normalizeAllergenTag(allergen);
+                if (term.isBlank()) {
+                    continue;
+                }
+                List<String> matches = findMatches(text, List.of(term));
                 if (!matches.isEmpty()) {
-                    conflicts.add("ALLERGY " + allergen.name() + " matched: " + String.join(", ", matches));
+                    detectedAllergens.add(allergen);
+                    matchedIngredients.addAll(matches.stream().map(match -> allergen + ": " + match).toList());
+                    conflicts.add("ALLERGY " + allergen + " matched: " + String.join(", ", matches));
                 }
             }
             for (DietaryRestriction restriction : profile.restrictions()) {
@@ -82,7 +65,7 @@ public class FoodAnalysisService {
         if (ingredientTokens.isEmpty()) {
             uncertainties.add("No usable ingredient entries were detected.");
         }
-        uncertainties.add("Keyword matching can miss synonyms, derivatives, ambiguous ingredients, and cross-contact. Verify the package label and contact the manufacturer for severe allergies.");
+        uncertainties.add("Ingredient text is matched only against allergens saved in the profile; this does not identify every allergen. Verify the package label and contact the manufacturer for severe allergies.");
 
         String status = conflicts.stream().anyMatch(s -> s.startsWith("ALLERGY ")) ? "POTENTIAL_ALLERGEN_CONFLICT"
                 : !conflicts.isEmpty() ? "DIETARY_CONFLICT"
@@ -91,12 +74,76 @@ public class FoodAnalysisService {
         return new AnalysisResponse(
                 request.productName() == null || request.productName().isBlank() ? "Unnamed product" : request.productName(),
                 status,
-                List.copyOf(detectedAllergens),
+                detectedAllergens.stream().distinct().toList(),
                 List.copyOf(conflicts),
                 matchedIngredients.stream().distinct().toList(),
                 List.copyOf(uncertainties),
-                "Results are based only on the ingredient text supplied. NO_MATCH_FOUND does not mean the product is safe."
+                "Results are based only on the ingredient text and saved profile allergens. NO_MATCH_FOUND does not mean the product is safe."
         );
+    }
+
+    public AnalysisResponse analyzeProduct(
+            String productName,
+            String ingredients,
+            List<String> allergenTags,
+            UserFoodProfile profile
+    ) {
+        List<String> detectedAllergens = allergenTags == null
+                ? List.of()
+                : allergenTags.stream().filter(Objects::nonNull).distinct().toList();
+        List<String> conflicts = new ArrayList<>();
+        if (profile != null) {
+            Set<String> productAllergenKeys = detectedAllergens.stream()
+                    .map(FoodAnalysisService::normalizeAllergenTag)
+                    .collect(Collectors.toSet());
+            for (String allergy : profile.allergies()) {
+                String allergyKey = normalizeAllergenTag(allergy);
+                if (productAllergenKeys.contains(allergyKey)) {
+                    conflicts.add("ALLERGY " + allergy + " matched Open Food Facts allergen tag: " + allergyKey);
+                }
+            }
+            String ingredientText = normalize(ingredients);
+            for (DietaryRestriction restriction : profile.restrictions()) {
+                List<String> matches = findMatches(
+                        ingredientText, RESTRICTION_TERMS.getOrDefault(restriction, List.of()));
+                if (!matches.isEmpty()) {
+                    conflicts.add(restriction.name() + " possible conflict: " + String.join(", ", matches));
+                }
+            }
+        }
+
+        List<String> uncertainties = new ArrayList<>();
+        if (ingredients == null || ingredients.isBlank()) {
+            uncertainties.add("Open Food Facts does not provide ingredient text for this product.");
+        }
+        if (detectedAllergens.isEmpty()) {
+            uncertainties.add("Open Food Facts does not provide allergen tags for this product.");
+        }
+        uncertainties.add("Open Food Facts product data is community-contributed and may be incomplete or outdated. Verify the package label and contact the manufacturer for severe allergies.");
+
+        String status = conflicts.stream().anyMatch(conflict -> conflict.startsWith("ALLERGY "))
+                ? "POTENTIAL_ALLERGEN_CONFLICT"
+                : !conflicts.isEmpty() ? "DIETARY_CONFLICT"
+                : !detectedAllergens.isEmpty() ? "ALLERGENS_DETECTED"
+                : "NO_MATCH_FOUND";
+        return new AnalysisResponse(
+                productName == null || productName.isBlank() ? "Unnamed product" : productName,
+                status,
+                detectedAllergens,
+                List.copyOf(conflicts),
+                List.of(),
+                List.copyOf(uncertainties),
+                "Results are based on Open Food Facts data. NO_MATCH_FOUND does not mean the product is safe."
+        );
+    }
+
+    private static String normalizeAllergenTag(String tag) {
+        String normalized = tag.toLowerCase(Locale.ROOT).trim();
+        int separator = normalized.indexOf(':');
+        if (separator >= 0) {
+            normalized = normalized.substring(separator + 1);
+        }
+        return normalized.replace('_', '-');
     }
 
     private static String normalize(String s) {
