@@ -5,11 +5,97 @@ REST backend that compares supplied ingredient text against a user profile conta
 ## Requirements
 - Java 21
 - Maven 3.9+ (or use your IDE's Maven integration)
+- Docker Desktop with Docker Compose for the local PostgreSQL database
 
 ## Run
+Start PostgreSQL from the backend directory:
+
 ```bash
+docker compose up -d
+```
+
+For local email testing, Compose also starts Mailpit. Configure the backend to deliver emails to this local inbox:
+
+```powershell
+$env:SMTP_HOST = "localhost"
+$env:SMTP_PORT = "1025"
+$env:SMTP_AUTH = "false"
+$env:SMTP_STARTTLS = "false"
+$env:AUTH_EMAIL_FROM = "noreply@bitewise.local"
+$env:PUBLIC_BASE_URL = "http://localhost:8080"
+$secretBytes = New-Object byte[] 32
+$rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($secretBytes)
+$env:JWT_SECRET_BASE64 = [Convert]::ToBase64String($secretBytes)
+$rng.Dispose()
+$env:AUTH_COOKIE_SECURE = "false"
 mvn spring-boot:run
 ```
+
+Open [http://localhost:8025](http://localhost:8025) to view local verification and password-reset emails. Mailpit captures these messages; it does not send them to real recipients.
+
+### Try the authentication flow
+
+With the backend and Mailpit running, use PowerShell to create an account. Replace the example email with an address you can recognize in Mailpit; local Mailpit does not deliver mail externally.
+
+```powershell
+$baseUrl = "http://localhost:8080"
+$email = "you@example.test"
+$password = "Use-a-local-test-password-123!"
+$registration = @{
+  email = $email
+  displayName = "Local Test"
+  password = $password
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri "$baseUrl/api/auth/register" `
+  -ContentType "application/json" -Body $registration
+```
+
+Open [http://localhost:8025](http://localhost:8025), open the verification email, and follow its link. Then log in and save the short-lived access token:
+
+```powershell
+$loginBody = @{ email = $email; password = $password } | ConvertTo-Json
+$login = Invoke-RestMethod -Method Post -Uri "$baseUrl/api/auth/login" `
+  -ContentType "application/json" -Body $loginBody
+$token = $login.accessToken
+$headers = @{ Authorization = "Bearer $token" }
+
+Invoke-RestMethod -Uri "$baseUrl/api/auth/me" -Headers $headers
+```
+
+The login response contains the access token and user information. The refresh token is sent separately as an HTTP-only `bitewise_refresh` cookie; browser clients should let the browser manage that cookie rather than reading it from JavaScript. To try an authenticated profile request:
+
+```powershell
+$profileBody = @{
+  name = "My local profile"
+  allergies = @("en:milk", "en:mustard")
+  restrictions = @("VEGAN")
+} | ConvertTo-Json
+
+$profile = Invoke-RestMethod -Method Post -Uri "$baseUrl/api/profiles" `
+  -Headers $headers -ContentType "application/json" -Body $profileBody
+$profile
+Invoke-RestMethod -Uri "$baseUrl/api/profiles" -Headers $headers
+```
+
+The profile response includes its generated ID. Profile routes return `401 Unauthorized` without a valid bearer access token. Other auth routes include `POST /api/auth/refresh`, `POST /api/auth/logout`, `POST /api/auth/logout-all`, `POST /api/auth/verification/resend`, `POST /api/auth/password/forgot`, `POST /api/auth/password/reset`, `POST /api/auth/password/change`, and `DELETE /api/auth/me` (requires authentication and the account password). Password-reset links/tokens are delivered to the same Mailpit inbox.
+
+To inspect persisted accounts and profiles locally, query PostgreSQL from the backend directory:
+
+```powershell
+docker compose exec postgres psql -U bitewise -d bitewise -c "SELECT id, email, email_verified, created_at FROM auth_users;"
+docker compose exec postgres psql -U bitewise -d bitewise -c "SELECT id, owner_id, name FROM food_profiles;"
+```
+
+Do not query or share password hashes, action tokens, refresh-token hashes, or access/refresh tokens. Use a disposable local account for testing.
+
+For real email delivery, configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `AUTH_EMAIL_FROM`, and (as required by your provider) `SMTP_AUTH` and `SMTP_STARTTLS`. Set these as environment variables or in a secret manager; never commit SMTP credentials. Use the provider's recommended TLS settings and an authorized sender address.
+
+The app connects to PostgreSQL at `localhost:5432` using the development credentials in `compose.yaml`. Override `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` through environment variables for another database or deployment. Never use the development database password or a sample JWT secret in production.
+
+Flyway applies versioned schema migrations automatically at startup; Hibernate validates the schema rather than modifying it.
+
 The API starts at `http://localhost:8080`.
 
 Run tests:
@@ -19,26 +105,30 @@ mvn test
 
 ## API
 
-### Create or update a profile
+### Create a profile
 `POST /api/profiles`
 
 ```json
 {
-  "id": "profile-1",
   "name": "Rohan",
-  "allergies": ["PEANUT", "MILK"],
+  "allergies": ["en:peanuts", "en:milk"],
   "restrictions": ["VEGAN", "GLUTEN_FREE"]
 }
 ```
 
 Profile `allergies` values are strings and may contain any Open Food Facts allergen tag, such as `en:milk` or `en:mustard`. The barcode lookup and analysis endpoints return and compare the product's live `allergens_tags` without mapping them to a fixed list. The ingredient-text endpoint can only perform literal matching against the allergy tags saved in a profile; it does not infer every allergen or synonym.
 
+All profile endpoints require a valid Bearer access token. The backend generates the profile ID and associates the profile with the authenticated account. Do not send an `id` or owner ID in the create body.
+
 Supported restrictions: `VEGAN`, `VEGETARIAN`, `PESCATARIAN`, `GLUTEN_FREE`, `DAIRY_FREE`, `EGG_FREE`, `SOY_FREE`, `LOW_SODIUM`, `KOSHER`, `HALAL`.
 
-### List, read, delete profiles
+### List, read, update, delete profiles
 - `GET /api/profiles`
 - `GET /api/profiles/{id}`
+- `PUT /api/profiles/{id}` (same body shape as create)
 - `DELETE /api/profiles/{id}`
+
+Profile IDs are UUIDs returned by create/list/get. Users can only access their own profiles; another user's profile is reported as not found.
 
 ### Analyze ingredients
 `POST /api/analyze`
@@ -47,16 +137,16 @@ Supported restrictions: `VEGAN`, `VEGETARIAN`, `PESCATARIAN`, `GLUTEN_FREE`, `DA
 {
   "productName": "Snack bar",
   "ingredients": "Oats, peanut butter, whey protein, salt. May contain sesame.",
-  "profileId": "profile-1"
+  "profileId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-`profileId` is optional. Without it, no allergen matching is performed by this ingredient-text endpoint.
+`profileId` is optional. Replace the example UUID with an ID returned by `POST /api/profiles`. Without it, no allergen matching is performed by this ingredient-text endpoint.
 
 ### Look up and analyze a barcode
 `GET /api/products/{barcode}` returns the product name, ingredient text, image URL, and Open Food Facts allergen tags. The barcode must contain 8–14 digits.
 
-`GET /api/products/{barcode}/analysis?profileId=profile-1` compares the product's community-contributed allergen tags with the saved profile. A profile tag matches whether supplied with or without the language prefix (for example, `milk` matches `en:milk`). Without `profileId`, this endpoint reports the product tags without profile conflict checks.
+`GET /api/products/{barcode}/analysis?profileId=550e8400-e29b-41d4-a716-446655440000` compares the product's community-contributed allergen tags with the saved profile. Replace the example UUID with an ID returned by `POST /api/profiles`. A profile tag matches whether supplied with or without the language prefix (for example, `milk` matches `en:milk`). Without `profileId`, this endpoint reports the product tags without profile conflict checks.
 
 ### Scan a barcode from an image
 `POST /api/products/scan` accepts a multipart `file` image, decodes a supported product barcode, and returns the matching Open Food Facts product. Supported barcode formats include EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39, ITF, and QR codes. The uploaded image must be 10 MB or smaller, and the barcode must decode to 8–14 digits.
@@ -127,13 +217,12 @@ check with a bunch of images. I have some in the test folder in food-safety-back
 - Unit tests for core analysis behavior
 
 ## Important implementation limits
-This starter backend uses an in-memory profile store, so profiles disappear when the app restarts. Add a database and authentication before deploying. Ingredient-text matching still uses a limited local keyword list. Open Food Facts data is community-contributed and may be missing or outdated; neither source is a certified food-safety system or establishes that food is safe. Image upload forwards an image contribution but does not perform OCR or infer product allergens from the image. For serious allergies, check the package's allergen statement and contact the manufacturer; do not rely on a keyword result alone.
+Profiles and authentication records are stored in PostgreSQL, with schema changes managed by Flyway. Configure a persistent, backed-up production PostgreSQL database before deployment; the included Compose service is for development. Account verification and password recovery require SMTP settings. Ingredient-text matching still uses a limited local keyword list. Open Food Facts data is community-contributed and may be missing or outdated; neither source is a certified food-safety system or establishes that food is safe. Image upload forwards an image contribution but does not perform OCR or infer product allergens from the image. For serious allergies, check the package's allergen statement and contact the manufacturer; do not rely on a keyword result alone.
 
-## Suggested production additions
-1. PostgreSQL persistence and schema migrations.
-2. Authentication and per-user authorization.
-3. Audit logging with privacy controls and rate limiting.
-4. OCR and label verification for package images.
-5. A reviewed ingredient ontology, multilingual synonyms, and automated regression tests.
-6. Integration tests and deployment configuration.
-7. Expand and review local allergen synonyms with food-safety domain experts; keyword matches are not a safety determination.
+## Potential next steps
+1. Add OCR and label verification for package images; image uploads currently contribute photos to Open Food Facts but do not read their contents.
+2. Build a reviewed ingredient ontology with multilingual synonyms and regression tests, with food-safety domain experts reviewing matching behavior.
+3. Add privacy-conscious audit logging and operational monitoring.
+4. Prepare production deployment: use a managed, backed-up PostgreSQL database, configure a real SMTP provider and production secrets, and add deployment-specific integration checks.
+
+PostgreSQL persistence, Flyway migrations, account authentication, and per-user profile authorization are already implemented. Keyword matches are not a food-safety determination.

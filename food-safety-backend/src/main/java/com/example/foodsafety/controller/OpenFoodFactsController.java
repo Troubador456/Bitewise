@@ -1,6 +1,7 @@
 package com.example.foodsafety.controller;
 
 import com.example.foodsafety.model.*;
+import com.example.foodsafety.auth.CurrentUserService;
 import com.example.foodsafety.service.FoodAnalysisService;
 import com.example.foodsafety.service.BarcodeImageService;
 import com.example.foodsafety.service.OpenFoodFactsService;
@@ -17,17 +18,20 @@ public class OpenFoodFactsController {
     private final BarcodeImageService barcodeImageService;
     private final FoodAnalysisService analysisService;
     private final ProfileService profileService;
+    private final CurrentUserService currentUser;
 
     public OpenFoodFactsController(
             OpenFoodFactsService openFoodFactsService,
             BarcodeImageService barcodeImageService,
             FoodAnalysisService analysisService,
-            ProfileService profileService
+            ProfileService profileService,
+            CurrentUserService currentUser
     ) {
         this.openFoodFactsService = openFoodFactsService;
         this.barcodeImageService = barcodeImageService;
         this.analysisService = analysisService;
         this.profileService = profileService;
+        this.currentUser = currentUser;
     }
 
     @GetMapping("/{barcode}")
@@ -73,7 +77,15 @@ public class OpenFoodFactsController {
         if (profileId == null || profileId.isBlank()) {
             return null;
         }
-        return profileService.find(profileId)
+        return profileService.find(currentUser.id(), parseProfileId(profileId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
+    }
+
+    private static java.util.UUID parseProfileId(String id) {
+        try {
+            return java.util.UUID.fromString(id);
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found");
+        }
     }
 }

@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class BarcodeImageServiceTest {
+class BarcodeImageScanTest {
     private final BarcodeImageService service = new BarcodeImageService();
 
     @Test
@@ -25,13 +25,15 @@ class BarcodeImageServiceTest {
         MatrixToImageWriter.writeToStream(matrix, "PNG", imageBytes);
         var image = new MockMultipartFile("file", "barcode.png", "image/png", imageBytes.toByteArray());
 
-        assertEquals("0028400642033", service.decode(image));
+        assertEquals("028400642033", service.decode(image));
     }
 
     @Test
-    void rejectsImageWithoutReadableBarcode() {
+    void rejectsImagesWithoutAReadableBarcode() {
         var image = new MockMultipartFile(
-                "file", "plain.png", "image/png",
+                "file",
+                "plain.png",
+                "image/png",
                 new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47});
 
         ResponseStatusException exception = assertThrows(

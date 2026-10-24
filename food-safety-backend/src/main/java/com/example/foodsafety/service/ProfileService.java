@@ -1,30 +1,58 @@
 package com.example.foodsafety.service;
 
+import com.example.foodsafety.model.FoodProfile;
+import com.example.foodsafety.model.FoodProfileRequest;
 import com.example.foodsafety.model.UserFoodProfile;
+import com.example.foodsafety.repository.FoodProfileRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
+import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
 
 @Service
 public class ProfileService {
-    private final Map<String, UserFoodProfile> profiles = new ConcurrentHashMap<>();
+    private final FoodProfileRepository profiles;
 
-    public UserFoodProfile save(UserFoodProfile profile) {
-        profiles.put(profile.id(), profile);
-        return profile;
+    public ProfileService(FoodProfileRepository profiles) {
+        this.profiles = profiles;
     }
 
-    public Optional<UserFoodProfile> find(String id) {
-        return Optional.ofNullable(profiles.get(id));
+    @Transactional
+    public UserFoodProfile create(UUID ownerId, FoodProfileRequest request) {
+        return profiles.save(new FoodProfile(ownerId, request)).toResponse();
     }
 
-    public Map<String, UserFoodProfile> all() {
-        return Map.copyOf(profiles);
+    @Transactional
+    public Optional<UserFoodProfile> update(UUID ownerId, UUID profileId, FoodProfileRequest request) {
+        return profiles.findByIdAndOwnerId(profileId, ownerId)
+                .map(profile -> {
+                    profile.update(request);
+                    return profile.toResponse();
+                });
     }
 
-    public boolean delete(String id) {
-        return profiles.remove(id) != null;
+    @Transactional(readOnly = true)
+    public Optional<UserFoodProfile> find(UUID ownerId, UUID profileId) {
+        return profiles.findByIdAndOwnerId(profileId, ownerId)
+                .map(FoodProfile::toResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserFoodProfile> all(UUID ownerId) {
+        return profiles.findAllByOwnerIdOrderByNameAsc(ownerId).stream()
+                .map(FoodProfile::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public boolean delete(UUID ownerId, UUID profileId) {
+        return profiles.findByIdAndOwnerId(profileId, ownerId)
+                .map(profile -> {
+                    profiles.delete(profile);
+                    return true;
+                })
+                .orElse(false);
     }
 }

@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: bitewise-postgres
+    environment:
+      POSTGRES_DB: bitewise
+      POSTGRES_USER: bitewise
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-bitewise-dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - bitewise-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bitewise -d bitewise"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: bitewise-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  bitewise-postgres-data:
