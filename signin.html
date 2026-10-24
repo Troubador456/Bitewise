@@ -111,6 +111,13 @@
             font-size: 13px;
         }
 
+        .form-message {
+            min-height: 1.5em;
+            color: #ffd8a8;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
         .signup-redirect a {
             color: #8ab4f8;
             text-decoration: none;
@@ -136,16 +143,17 @@
         <h2>Sign In</h2>
         <form id="loginForm">
             <div class="form-group">
-                <label for="username">Username or Email</label>
-                <input type="text" id="username" name="username" required>
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" autocomplete="email" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" autocomplete="current-password" required>
             </div>
 
             <button type="submit">Sign In</button>
+            <p id="loginMessage" class="form-message" role="status" aria-live="polite"></p>
         </form>
 
         <div class="signup-redirect">
@@ -153,29 +161,27 @@
         </div>
     </div>
 
+    <script src="api-config.js"></script>
+    <script src="auth.js"></script>
     <script>
         document.getElementById('loginForm').addEventListener('submit', async function (e) {
             e.preventDefault();
-
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-
+            const submitButton = this.querySelector('button[type="submit"]');
+            const message = document.getElementById('loginMessage');
+            submitButton.disabled = true;
+            message.textContent = 'Signing in...';
             try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                const responseText = await response.text();
-
-                if (response.ok) {
-                    window.location.href = 'home.html';
-                } else {
-                    alert('Login failed: ' + responseText);
-                }
-            } catch (err) {
-                alert('Could not connect to the server. Make sure the Spring Boot backend is running.');
+                await BitewiseAuth.login(
+                    document.getElementById('email').value.trim(),
+                    document.getElementById('password').value
+                );
+                window.location.href = 'home.html';
+            } catch (error) {
+                message.textContent = error instanceof Error
+                    ? error.message
+                    : 'Could not sign in. Check that the backend is running.';
+            } finally {
+                submitButton.disabled = false;
             }
         });
     </script>

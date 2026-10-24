@@ -24,6 +24,7 @@ import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -56,6 +57,19 @@ class AuthenticatedProfileApiTest {
     void rejectsProfileRequestsWithoutBearerToken() throws Exception {
         mockMvc.perform(get("/api/profiles"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void allowsLocalLiveServerOriginToPreflightAuthRequests() throws Exception {
+        mockMvc.perform(options("/api/auth/login")
+                        .header("Origin", "http://127.0.0.1:5500")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Access-Control-Allow-Origin", "http://127.0.0.1:5500"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Access-Control-Allow-Credentials", "true"));
     }
 
     @Test

@@ -337,11 +337,13 @@
     <header class="site-header">
         <a class="brand" href="home.html">Bitewise</a>
         <div class="header-actions">
+            <span id="accountLabel" aria-live="polite"></span>
             <label for="profileSelect" class="visually-hidden">Active food profile</label>
             <select id="profileSelect" class="profile-picker" aria-label="Active food profile">
                 <option value="">Loading profiles...</option>
             </select>
             <button id="profileButton" type="button">Create profile</button>
+            <button id="logoutButton" class="button-link" type="button">Sign out</button>
             <a class="button-link" href="index.html">Home</a>
         </div>
     </header>
@@ -388,6 +390,11 @@
                     <fieldset>
                         <legend>Allergies</legend>
                         <div id="allergyOptions" class="checkbox-grid"></div>
+                        <div class="field">
+                            <label for="customAllergies">Other allergen tags</label>
+                            <input id="customAllergies" name="customAllergies" placeholder="en:mustard, en:lupin">
+                            <span class="subtle">Enter any Open Food Facts tags separated by commas.</span>
+                        </div>
                     </fieldset>
                     <fieldset>
                         <legend>Dietary restrictions</legend>
@@ -403,6 +410,8 @@
         </div>
     </dialog>
 
+    <script src="api-config.js"></script>
+    <script src="auth.js"></script>
     <script>
         const PROFILE_STORAGE_KEY = 'bitewise.activeProfileId';
         const ALLERGIES = [
@@ -434,6 +443,7 @@
         const profileDialog = document.getElementById('profileDialog');
         const profileForm = document.getElementById('profileForm');
         const profileName = document.getElementById('profileName');
+        const customAllergies = document.getElementById('customAllergies');
         const profileMessage = document.getElementById('profileMessage');
         const scanForm = document.getElementById('scanForm');
         const scanButton = document.getElementById('scanButton');
@@ -472,6 +482,10 @@
             for (const checkbox of profileForm.querySelectorAll(`input[name="${groupName}"]`)) {
                 checkbox.checked = selected.has(checkbox.value);
             }
+            if (groupName === 'allergies') {
+                const knownAllergies = new Set(ALLERGIES.map(([value]) => value));
+                customAllergies.value = values.filter(value => !knownAllergies.has(value)).join(', ');
+            }
         }
 
         function updateProfileControls() {
@@ -496,11 +510,7 @@
 
         async function loadProfiles() {
             setMessage(scanMessage, 'Loading your profiles...');
-            const response = await fetch('/api/profiles');
-            if (!response.ok) {
-                throw new Error(`Could not load profiles (HTTP ${response.status}).`);
-            }
-            const loadedProfiles = await response.json();
+            const loadedProfiles = await BitewiseAuth.requestJson('/api/profiles');
             if (!Array.isArray(loadedProfiles)) {
                 throw new Error('The server returned an invalid profile list.');
             }
@@ -589,6 +599,10 @@
             updateProfileControls();
         });
 
+        document.getElementById('logoutButton').addEventListener('click', () => {
+            BitewiseAuth.logout();
+        });
+
         profileForm.addEventListener('submit', async event => {
             event.preventDefault();
             setMessage(profileMessage, '');
@@ -596,21 +610,21 @@
             saveButton.disabled = true;
             try {
                 const profile = {
-                    id: activeProfile?.id ?? crypto.randomUUID(),
                     name: profileName.value.trim(),
-                    allergies: selectedValues('allergies'),
+                    allergies: [...new Set([
+                        ...selectedValues('allergies'),
+                        ...customAllergies.value.split(',').map(value => value.trim()).filter(Boolean)
+                    ])],
                     restrictions: selectedValues('restrictions')
                 };
-                const response = await fetch('/api/profiles', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(profile)
-                });
-                if (!response.ok) {
-                    const error = await response.text();
-                    throw new Error(error || `Could not save profile (HTTP ${response.status}).`);
-                }
-                const savedProfile = await response.json();
+                const isUpdate = activeProfile !== null;
+                const savedProfile = await BitewiseAuth.requestJson(
+                    isUpdate ? `/api/profiles/${encodeURIComponent(activeProfile.id)}` : '/api/profiles',
+                    {
+                        method: isUpdate ? 'PUT' : 'POST',
+                        body: JSON.stringify(profile)
+                    }
+                );
                 profiles = [...profiles.filter(item => item.id !== savedProfile.id), savedProfile];
                 activeProfile = savedProfile;
                 localStorage.setItem(PROFILE_STORAGE_KEY, savedProfile.id);
@@ -630,20 +644,14 @@
             scanResult.hidden = true;
             scanButton.disabled = true;
             try {
-                const response = await fetch('/api/analyze', {
+                const result = await BitewiseAuth.requestJson('/api/analyze', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         productName: document.getElementById('productName').value.trim(),
                         ingredients: document.getElementById('ingredients').value,
                         profileId: activeProfile?.id ?? null
                     })
                 });
-                if (!response.ok) {
-                    const error = await response.text();
-                    throw new Error(error || `Could not check ingredients (HTTP ${response.status}).`);
-                }
-                const result = await response.json();
                 showScanResult(result);
                 setMessage(scanMessage, 'Ingredient check complete.', true);
             } catch (error) {
@@ -653,9 +661,18 @@
             }
         });
 
-        loadProfiles().catch(error => {
+        async function startDashboard() {
+            const user = await BitewiseAuth.requireAuth();
+            if (!user) {
+                return;
+            }
+            document.getElementById('accountLabel').textContent = user.displayName;
+            await loadProfiles();
+        }
+
+        startDashboard().catch(error => {
             updateProfileControls();
-            setMessage(scanMessage, error instanceof Error ? error.message : 'Could not load profiles.');
+            setMessage(scanMessage, error instanceof Error ? error.message : 'Could not load your account.');
         });
     </script>
 </body>

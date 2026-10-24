@@ -111,6 +111,13 @@
             font-size: 13px;
         }
 
+        .form-message {
+            min-height: 1.5em;
+            color: #ffd8a8;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
         .signin-redirect a {
             color: #8ab4f8;
             text-decoration: none;
@@ -136,16 +143,22 @@
         <h2>Create Account</h2>
         <form id="signupForm">
             <div class="form-group">
-                <label for="username">Username or Email</label>
-                <input type="text" id="username" name="username" required>
+                <label for="displayName">Name</label>
+                <input type="text" id="displayName" name="displayName" maxlength="100" autocomplete="name" required>
             </div>
-            
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" maxlength="320" autocomplete="email" required>
+            </div>
+
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" minlength="12" maxlength="128" autocomplete="new-password" required>
             </div>
 
             <button type="submit">Sign Up</button>
+            <p id="signupMessage" class="form-message" role="status" aria-live="polite"></p>
         </form>
 
         <div class="signin-redirect">
@@ -153,31 +166,30 @@
         </div>
     </div>
 
+    <script src="api-config.js"></script>
+    <script src="auth.js"></script>
     <script>
-        document.getElementById('signupForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
-
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+        document.getElementById('signupForm').addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const submitButton = this.querySelector('button[type="submit"]');
+            const message = document.getElementById('signupMessage');
+            submitButton.disabled = true;
+            message.textContent = 'Creating your account...';
 
             try {
-                const response = await fetch('/api/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                const responseText = await response.text();
-
-                if (response.ok) {
-                    alert('Success: ' + responseText);
-                    window.location.href = 'signin.html'; 
-                } else {
-                    alert('Registration failed: ' + responseText);
-                }
-            } catch (err) {
-                console.error('Network error:', err);
-                alert('Could not connect to the server. Make sure the Spring Boot backend is running.');
+                const result = await BitewiseAuth.register(
+                    document.getElementById('email').value.trim(),
+                    document.getElementById('displayName').value.trim(),
+                    document.getElementById('password').value
+                );
+                message.textContent = `${result.message} Check your email, then sign in. For local testing, open the Mailpit inbox.`;
+                this.reset();
+            } catch (error) {
+                message.textContent = error instanceof Error
+                    ? error.message
+                    : 'Could not create your account. Check that the backend is running.';
+            } finally {
+                submitButton.disabled = false;
             }
         });
     </script>

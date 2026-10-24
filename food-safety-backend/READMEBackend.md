@@ -32,6 +32,8 @@ $env:AUTH_COOKIE_SECURE = "false"
 mvn spring-boot:run
 ```
 
+Run the environment setup and `mvn spring-boot:run` in the same PowerShell window. Do not run Maven by itself: the app intentionally refuses to start without `JWT_SECRET_BASE64`. The generated JWT secret is local to that PowerShell session and should not be committed or reused in production.
+
 Open [http://localhost:8025](http://localhost:8025) to view local verification and password-reset emails. Mailpit captures these messages; it does not send them to real recipients.
 
 ### Try the authentication flow
@@ -97,6 +99,23 @@ The app connects to PostgreSQL at `localhost:5432` using the development credent
 Flyway applies versioned schema migrations automatically at startup; Hibernate validates the schema rather than modifying it.
 
 The API starts at `http://localhost:8080`.
+
+### Run the browser frontend
+
+Serve the repository root (`index.html`, `signin.html`, `createaccount.html`, and `home.html`) with VS Code Live Server. Open the Live Server URL, such as `http://127.0.0.1:5500/index.html`; do not open the HTML files directly with a `file://` URL because browser security blocks API requests from that origin. If VS Code Live Server chooses port `5501`, that origin is also allowed by default.
+
+The frontend API URL is set in the repository-root `api-config.js` and defaults to port `8080` on the same hostname as the frontend. Keeping the hostname consistent (both `localhost` or both `127.0.0.1`) lets the browser send the HTTP-only refresh cookie. If the backend is running on another port, change the port in that file to match. The backend's default CORS allowlist includes the common Live Server origins on ports `5500` and `5501`; for another frontend origin, set `CORS_ALLOWED_ORIGINS` before starting Spring Boot, for example:
+
+```powershell
+$env:CORS_ALLOWED_ORIGINS = "http://localhost:5500,http://127.0.0.1:5500"
+mvn spring-boot:run
+```
+
+Create an account in the frontend, verify the email through Mailpit at [http://localhost:8025](http://localhost:8025), and then sign in. The dashboard loads and saves profiles using the authenticated API. The access token is kept in the current browser tab's session storage; the refresh token remains in an HTTP-only cookie.
+
+Restart Spring Boot after changing its CORS settings so the new allowlist takes effect.
+
+If the frontend reports “Failed to fetch,” confirm the backend started successfully and restart any previously running backend after CORS settings change. The Maven Flyway metadata `401` warning is separate; the fatal startup error in that case is the missing JWT secret.
 
 Run tests:
 ```bash
