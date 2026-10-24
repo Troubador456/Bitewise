@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account - Bitewise</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, red, orange, yellow, green, blue, indigo, violet);
+            background-size: 400% 400%;
+            animation: gradientAnimation 15s ease infinite;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        
+        .produce {
+            position: absolute;
+            font-size: 38px;
+            opacity: 0.7;
+            animation: flyAround linear infinite;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        @keyframes flyAround {
+            0% {
+                transform: translateY(105vh) translateX(0) rotate(0deg);
+            }
+            100% {
+                transform: translateY(-10vh) translateX(120px) rotate(360deg);
+            }
+        }
+
+        
+        .produce:nth-child(1)  { left: 8%;  animation-duration: 6s; animation-delay: 0s;  font-size: 45px; }
+        .produce:nth-child(2)  { left: 20%; animation-duration: 8s; animation-delay: 2s;  font-size: 38px; }
+        .produce:nth-child(3)  { left: 32%; animation-duration: 5s; animation-delay: 1s;  font-size: 50px; }
+        .produce:nth-child(4)  { left: 45%; animation-duration: 7s; animation-delay: 3s;  font-size: 42px; }
+        .produce:nth-child(5)  { left: 58%; animation-duration: 9s; animation-delay: 1.5s;font-size: 46px; }
+        .produce:nth-child(6)  { left: 70%; animation-duration: 6s; animation-delay: 4s;  font-size: 40px; }
+        .produce:nth-child(7)  { left: 82%; animation-duration: 7.5s; animation-delay: 0.5s; font-size: 48px; }
+        .produce:nth-child(8)  { left: 92%; animation-duration: 5.5s; animation-delay: 2.5s; font-size: 44px; }
+
+        .signup-container {
+            background-color: black;
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            width: 320px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .signup-container h2 {
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background-color: #222;
+            color: white;
+        }
+
+        button[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            background-color: #fff;
+            color: black;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button[type="submit"]:hover {
+            background-color: #ddd;
+        }
+
+        .signin-redirect {
+            margin-top: 15px;
+            font-size: 13px;
+        }
+
+        .signin-redirect a {
+            color: #8ab4f8;
+            text-decoration: none;
+        }
+
+        .signin-redirect a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <!-- Floating Background Fruits & Vegetables -->
+    <div class="produce">🍎</div>
+    <div class="produce">🥦</div>
+    <div class="produce">🍌</div>
+    <div class="produce">🥕</div>
+    <div class="produce">🍇</div>
+    <div class="produce">🍅</div>
+    <div class="produce">🍊</div>
+    <div class="produce">🥒</div>
+
+    <div class="signup-container">
+        <h2>Create Account</h2>
+        <form id="signupForm">
+            <div class="form-group">
+                <label for="username">Username or Email</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <button type="submit">Sign Up</button>
+        </form>
+
+        <div class="signin-redirect">
+            <p>Already have an account? <a href="signin.html">Sign In</a></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('signupForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const responseText = await response.text();
+
+                if (response.ok) {
+                    alert('Success: ' + responseText);
+                    window.location.href = 'signin.html'; 
+                } else {
+                    alert('Registration failed: ' + responseText);
+                }
+            } catch (err) {
+                console.error('Network error:', err);
+                alert('Could not connect to the server. Make sure the Spring Boot backend is running.');
+            }
+        });
+    </script>
+</body>
+</html>

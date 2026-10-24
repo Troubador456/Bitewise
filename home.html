@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Manage your food profile and check ingredient labels for potential conflicts.">
+    <title>Your Bitewise Home</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: Arial, sans-serif;
+            color: #173329;
+            background: #f3f7f1;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(145deg, #eef7e9, #f8f8f2 52%, #e5f2e6);
+        }
+
+        button,
+        input,
+        select,
+        textarea {
+            font: inherit;
+        }
+
+        button,
+        .button-link {
+            border: 0;
+            border-radius: 8px;
+            padding: 11px 16px;
+            background: #176b48;
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        button:hover,
+        .button-link:hover {
+            background: #10583a;
+        }
+
+        button:focus-visible,
+        a:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        textarea:focus-visible {
+            outline: 3px solid #f1b84b;
+            outline-offset: 2px;
+        }
+
+        .site-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 18px;
+            padding: 18px max(24px, calc((100vw - 1080px) / 2));
+            background: #123d2d;
+            color: white;
+        }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .brand {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .profile-picker {
+            min-width: 180px;
+            max-width: 260px;
+            padding: 10px;
+            border: 1px solid #b7d2c1;
+            border-radius: 8px;
+            background: white;
+            color: #173329;
+        }
+
+        .button-link {
+            display: inline-block;
+            border: 1px solid white;
+            background: transparent;
+            color: white;
+        }
+
+        .button-link:hover {
+            background: white;
+            color: #123d2d;
+        }
+
+        main {
+            width: min(100% - 32px, 900px);
+            margin: 36px auto;
+        }
+
+        .intro {
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: clamp(30px, 5vw, 42px);
+        }
+
+        .intro p,
+        .subtle {
+            color: #4c6559;
+            line-height: 1.55;
+        }
+
+        .card {
+            margin: 18px 0;
+            padding: clamp(20px, 4vw, 30px);
+            border: 1px solid #d8e5d9;
+            border-radius: 16px;
+            background: white;
+            box-shadow: 0 8px 24px rgba(25, 57, 40, 0.07);
+        }
+
+        .card h2 {
+            margin: 0 0 8px;
+            font-size: 23px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .field {
+            display: grid;
+            gap: 7px;
+            margin: 15px 0;
+        }
+
+        .field label,
+        fieldset legend {
+            font-weight: 700;
+        }
+
+        .field input,
+        .field textarea {
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid #aebfb1;
+            border-radius: 8px;
+            background: white;
+            color: #173329;
+        }
+
+        .field textarea {
+            min-height: 140px;
+            resize: vertical;
+        }
+
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .check-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 9px;
+            line-height: 1.35;
+        }
+
+        .check-option input {
+            margin-top: 2px;
+            accent-color: #176b48;
+        }
+
+        fieldset {
+            min-width: 0;
+            margin: 18px 0;
+            padding: 16px;
+            border: 1px solid #d8e5d9;
+            border-radius: 10px;
+        }
+
+        .form-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .secondary-button {
+            border: 1px solid #176b48;
+            background: white;
+            color: #176b48;
+        }
+
+        .secondary-button:hover {
+            background: #edf6ef;
+            color: #10583a;
+        }
+
+        .message {
+            min-height: 1.5em;
+            margin: 12px 0 0;
+            color: #8b2a1e;
+            line-height: 1.5;
+        }
+
+        .message.success {
+            color: #176b48;
+        }
+
+        .result {
+            margin-top: 22px;
+            padding: 18px;
+            border-radius: 10px;
+            background: #f2f7f1;
+        }
+
+        .result h3 {
+            margin: 0 0 8px;
+        }
+
+        .result ul {
+            padding-left: 22px;
+            line-height: 1.55;
+        }
+
+        .result p {
+            line-height: 1.55;
+        }
+
+        .disclaimer {
+            padding: 12px 0 30px;
+            color: #4c6559;
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        dialog {
+            width: min(720px, calc(100% - 24px));
+            max-height: 90vh;
+            padding: 0;
+            border: 0;
+            border-radius: 16px;
+            color: #173329;
+            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+        }
+
+        dialog::backdrop {
+            background: rgba(9, 30, 20, 0.62);
+        }
+
+        .dialog-content {
+            max-height: 90vh;
+            overflow: auto;
+            padding: clamp(20px, 4vw, 30px);
+        }
+
+        .dialog-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .dialog-header h2 {
+            margin: 0;
+        }
+
+        .close-button {
+            padding: 6px 10px;
+            background: #eaf1eb;
+            color: #173329;
+        }
+
+        .close-button:hover {
+            background: #dbe8dc;
+            color: #173329;
+        }
+
+        @media (max-width: 640px) {
+            .site-header {
+                align-items: flex-start;
+                padding: 16px;
+            }
+
+            .header-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .profile-picker {
+                width: 100%;
+                max-width: none;
+            }
+
+            .form-grid,
+            .checkbox-grid {
+                grid-template-columns: 1fr;
+            }
+
+            main {
+                margin-top: 26px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="home.html">Bitewise</a>
+        <div class="header-actions">
+            <label for="profileSelect" class="visually-hidden">Active food profile</label>
+            <select id="profileSelect" class="profile-picker" aria-label="Active food profile">
+                <option value="">Loading profiles...</option>
+            </select>
+            <button id="profileButton" type="button">Create profile</button>
+            <a class="button-link" href="index.html">Home</a>
+        </div>
+    </header>
+
+    <main>
+        <section class="intro">
+            <h1>Your food dashboard</h1>
+            <p>Manage your allergies and dietary needs, then check an item's ingredient label before you choose it.</p>
+        </section>
+
+        <section class="card" aria-labelledby="scanTitle">
+            <h2 id="scanTitle">Check an item</h2>
+            <p class="subtle">Enter the product name and copy the ingredients from its package. The results are based only on the text you provide.</p>
+            <form id="scanForm">
+                <div class="field">
+                    <label for="productName">Product name <span class="subtle">(optional)</span></label>
+                    <input id="productName" name="productName" maxlength="120" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="ingredients">Ingredients from the label</label>
+                    <textarea id="ingredients" name="ingredients" required placeholder="For example: Oats, peanut butter, whey protein, salt. May contain sesame."></textarea>
+                </div>
+                <button id="scanButton" type="submit">Check ingredients</button>
+            </form>
+            <p id="scanMessage" class="message" role="status" aria-live="polite"></p>
+            <section id="scanResult" class="result" aria-live="polite" hidden></section>
+        </section>
+        <p class="disclaimer">Bitewise uses basic keyword matching, not a certified food-safety system. It cannot verify the label or rule out cross-contact. Always check the package and contact the manufacturer about serious allergies.</p>
+    </main>
+
+    <dialog id="profileDialog" aria-labelledby="profileDialogTitle">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h2 id="profileDialogTitle">Create your food profile</h2>
+                <button id="closeProfileDialog" class="close-button" type="button" aria-label="Close">Close</button>
+            </div>
+            <p class="subtle">Choose the allergies and dietary restrictions to check against ingredient labels.</p>
+            <form id="profileForm">
+                <div class="field">
+                    <label for="profileName">Profile name</label>
+                    <input id="profileName" name="name" required maxlength="80" autocomplete="name">
+                </div>
+                <div class="form-grid">
+                    <fieldset>
+                        <legend>Allergies</legend>
+                        <div id="allergyOptions" class="checkbox-grid"></div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Dietary restrictions</legend>
+                        <div id="restrictionOptions" class="checkbox-grid"></div>
+                    </fieldset>
+                </div>
+                <p id="profileMessage" class="message" role="status" aria-live="polite"></p>
+                <div class="form-actions">
+                    <button id="saveProfileButton" type="submit">Save profile</button>
+                    <button class="secondary-button" type="button" id="cancelProfileButton">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <script>
+        const PROFILE_STORAGE_KEY = 'bitewise.activeProfileId';
+        const ALLERGIES = [
+            ['PEANUT', 'Peanut'],
+            ['TREE_NUT', 'Tree nuts'],
+            ['MILK', 'Milk'],
+            ['EGG', 'Egg'],
+            ['WHEAT', 'Wheat'],
+            ['SOY', 'Soy'],
+            ['FISH', 'Fish'],
+            ['SHELLFISH', 'Shellfish'],
+            ['SESAME', 'Sesame']
+        ];
+        const RESTRICTIONS = [
+            ['VEGAN', 'Vegan'],
+            ['VEGETARIAN', 'Vegetarian'],
+            ['PESCATARIAN', 'Pescatarian'],
+            ['GLUTEN_FREE', 'Gluten-free'],
+            ['DAIRY_FREE', 'Dairy-free'],
+            ['EGG_FREE', 'Egg-free'],
+            ['SOY_FREE', 'Soy-free'],
+            ['LOW_SODIUM', 'Low sodium'],
+            ['KOSHER', 'Kosher'],
+            ['HALAL', 'Halal']
+        ];
+
+        const profileSelect = document.getElementById('profileSelect');
+        const profileButton = document.getElementById('profileButton');
+        const profileDialog = document.getElementById('profileDialog');
+        const profileForm = document.getElementById('profileForm');
+        const profileName = document.getElementById('profileName');
+        const profileMessage = document.getElementById('profileMessage');
+        const scanForm = document.getElementById('scanForm');
+        const scanButton = document.getElementById('scanButton');
+        const scanMessage = document.getElementById('scanMessage');
+        const scanResult = document.getElementById('scanResult');
+        let profiles = [];
+        let activeProfile = null;
+
+        function setMessage(element, message, success = false) {
+            element.textContent = message;
+            element.classList.toggle('success', success);
+        }
+
+        function addCheckboxOptions(container, groupName, options) {
+            for (const [value, label] of options) {
+                const wrapper = document.createElement('label');
+                wrapper.className = 'check-option';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = groupName;
+                checkbox.value = value;
+                const text = document.createElement('span');
+                text.textContent = label;
+                wrapper.append(checkbox, text);
+                container.append(wrapper);
+            }
+        }
+
+        function selectedValues(groupName) {
+            return Array.from(profileForm.querySelectorAll(`input[name="${groupName}"]:checked`))
+                .map(input => input.value);
+        }
+
+        function setSelectedValues(groupName, values) {
+            const selected = new Set(values);
+            for (const checkbox of profileForm.querySelectorAll(`input[name="${groupName}"]`)) {
+                checkbox.checked = selected.has(checkbox.value);
+            }
+        }
+
+        function updateProfileControls() {
+            const selectedId = activeProfile?.id ?? '';
+            profileSelect.replaceChildren();
+            if (profiles.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No profiles yet';
+                profileSelect.append(option);
+            } else {
+                for (const profile of profiles) {
+                    const option = document.createElement('option');
+                    option.value = profile.id;
+                    option.textContent = profile.name;
+                    profileSelect.append(option);
+                }
+                profileSelect.value = selectedId;
+            }
+            profileButton.textContent = activeProfile ? 'Edit profile' : 'Create profile';
+        }
+
+        async function loadProfiles() {
+            setMessage(scanMessage, 'Loading your profiles...');
+            const response = await fetch('/api/profiles');
+            if (!response.ok) {
+                throw new Error(`Could not load profiles (HTTP ${response.status}).`);
+            }
+            const loadedProfiles = await response.json();
+            if (!Array.isArray(loadedProfiles)) {
+                throw new Error('The server returned an invalid profile list.');
+            }
+            profiles = loadedProfiles;
+            const savedId = localStorage.getItem(PROFILE_STORAGE_KEY);
+            activeProfile = profiles.find(profile => profile.id === savedId) ?? profiles[0] ?? null;
+            if (activeProfile) {
+                localStorage.setItem(PROFILE_STORAGE_KEY, activeProfile.id);
+            } else {
+                localStorage.removeItem(PROFILE_STORAGE_KEY);
+            }
+            updateProfileControls();
+            setMessage(scanMessage, activeProfile
+                ? `Checking ingredients against ${activeProfile.name}'s profile.`
+                : 'Create a profile to check ingredients against your allergies and restrictions.', true);
+        }
+
+        function openProfileEditor(profile = null) {
+            profileForm.reset();
+            setMessage(profileMessage, '');
+            document.getElementById('profileDialogTitle').textContent =
+                profile ? 'Edit your food profile' : 'Create your food profile';
+            document.getElementById('saveProfileButton').textContent =
+                profile ? 'Save changes' : 'Create profile';
+            profileName.value = profile?.name ?? '';
+            setSelectedValues('allergies', profile?.allergies ?? []);
+            setSelectedValues('restrictions', profile?.restrictions ?? []);
+            profileDialog.showModal();
+        }
+
+        function appendResultList(container, title, values, emptyText) {
+            const heading = document.createElement('h3');
+            heading.textContent = title;
+            container.append(heading);
+            if (values.length === 0) {
+                const paragraph = document.createElement('p');
+                paragraph.textContent = emptyText;
+                container.append(paragraph);
+                return;
+            }
+            const list = document.createElement('ul');
+            for (const value of values) {
+                const item = document.createElement('li');
+                item.textContent = value;
+                list.append(item);
+            }
+            container.append(list);
+        }
+
+        function showScanResult(result) {
+            scanResult.replaceChildren();
+            const heading = document.createElement('h2');
+            heading.textContent = result.productName || 'Ingredient check';
+            const status = document.createElement('p');
+            status.textContent = `Result: ${(result.status || 'UNKNOWN').replaceAll('_', ' ')}`;
+            const explanation = document.createElement('p');
+            explanation.textContent = result.explanation || '';
+            scanResult.append(heading, status, explanation);
+            appendResultList(scanResult, 'Potential conflicts', result.restrictionConflicts ?? [],
+                'No configured allergy or restriction keywords matched.');
+            appendResultList(scanResult, 'Detected allergens', result.detectedAllergens ?? [],
+                'No configured allergen keywords were detected in the supplied text.');
+            appendResultList(scanResult, 'Matched label terms', result.matchedIngredients ?? [],
+                'No ingredient terms matched.');
+            appendResultList(scanResult, 'Important uncertainties', result.uncertainties ?? [],
+                'No additional uncertainty notes.');
+            scanResult.hidden = false;
+        }
+
+        addCheckboxOptions(document.getElementById('allergyOptions'), 'allergies', ALLERGIES);
+        addCheckboxOptions(document.getElementById('restrictionOptions'), 'restrictions', RESTRICTIONS);
+
+        profileButton.addEventListener('click', () => openProfileEditor(activeProfile));
+        document.getElementById('closeProfileDialog').addEventListener('click', () => profileDialog.close());
+        document.getElementById('cancelProfileButton').addEventListener('click', () => profileDialog.close());
+
+        profileSelect.addEventListener('change', () => {
+            activeProfile = profiles.find(profile => profile.id === profileSelect.value) ?? null;
+            if (activeProfile) {
+                localStorage.setItem(PROFILE_STORAGE_KEY, activeProfile.id);
+                setMessage(scanMessage, `Checking ingredients against ${activeProfile.name}'s profile.`, true);
+            } else {
+                localStorage.removeItem(PROFILE_STORAGE_KEY);
+                setMessage(scanMessage, 'Create a profile to check ingredients against your allergies and restrictions.');
+            }
+            updateProfileControls();
+        });
+
+        profileForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            setMessage(profileMessage, '');
+            const saveButton = document.getElementById('saveProfileButton');
+            saveButton.disabled = true;
+            try {
+                const profile = {
+                    id: activeProfile?.id ?? crypto.randomUUID(),
+                    name: profileName.value.trim(),
+                    allergies: selectedValues('allergies'),
+                    restrictions: selectedValues('restrictions')
+                };
+                const response = await fetch('/api/profiles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(profile)
+                });
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error || `Could not save profile (HTTP ${response.status}).`);
+                }
+                const savedProfile = await response.json();
+                profiles = [...profiles.filter(item => item.id !== savedProfile.id), savedProfile];
+                activeProfile = savedProfile;
+                localStorage.setItem(PROFILE_STORAGE_KEY, savedProfile.id);
+                updateProfileControls();
+                profileDialog.close();
+                setMessage(scanMessage, `Profile saved. Ingredient checks will use ${savedProfile.name}'s allergies and restrictions.`, true);
+            } catch (error) {
+                setMessage(profileMessage, error instanceof Error ? error.message : 'Could not save profile.');
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+
+        scanForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            setMessage(scanMessage, '');
+            scanResult.hidden = true;
+            scanButton.disabled = true;
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        productName: document.getElementById('productName').value.trim(),
+                        ingredients: document.getElementById('ingredients').value,
+                        profileId: activeProfile?.id ?? null
+                    })
+                });
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error || `Could not check ingredients (HTTP ${response.status}).`);
+                }
+                const result = await response.json();
+                showScanResult(result);
+                setMessage(scanMessage, 'Ingredient check complete.', true);
+            } catch (error) {
+                setMessage(scanMessage, error instanceof Error ? error.message : 'Could not check these ingredients.');
+            } finally {
+                scanButton.disabled = false;
+            }
+        });
+
+        loadProfiles().catch(error => {
+            updateProfileControls();
+            setMessage(scanMessage, error instanceof Error ? error.message : 'Could not load profiles.');
+        });
+    </script>
+</body>
+</html>

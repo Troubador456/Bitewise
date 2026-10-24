@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Make grocery choices with more confidence. Bitewise helps you check food against your dietary needs.">
+    <title>Bitewise - Shop with confidence</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, red, orange, yellow, green, blue, indigo, violet);
+            background-size: 400% 400%;
+            animation: gradientAnimation 15s ease infinite;
+            font-family: Arial, sans-serif;
+            color: white;
+            position: relative;
+            isolation: isolate;
+        }
+
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .produce {
+            position: fixed;
+            z-index: -1;
+            font-size: 38px;
+            opacity: 0.7;
+            animation: flyAround linear infinite;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        @keyframes flyAround {
+            0% {
+                transform: translateY(105vh) translateX(0) rotate(0deg);
+            }
+            100% {
+                transform: translateY(-10vh) translateX(120px) rotate(360deg);
+            }
+        }
+
+        .produce:nth-of-type(1) { left: 8%; animation-duration: 6s; font-size: 45px; }
+        .produce:nth-of-type(2) { left: 20%; animation-duration: 8s; animation-delay: 2s; }
+        .produce:nth-of-type(3) { left: 32%; animation-duration: 5s; animation-delay: 1s; font-size: 50px; }
+        .produce:nth-of-type(4) { left: 45%; animation-duration: 7s; animation-delay: 3s; font-size: 42px; }
+        .produce:nth-of-type(5) { left: 58%; animation-duration: 9s; animation-delay: 1.5s; font-size: 46px; }
+        .produce:nth-of-type(6) { left: 70%; animation-duration: 6s; animation-delay: 4s; font-size: 40px; }
+        .produce:nth-of-type(7) { left: 82%; animation-duration: 7.5s; animation-delay: 0.5s; font-size: 48px; }
+        .produce:nth-of-type(8) { left: 92%; animation-duration: 5.5s; animation-delay: 2.5s; font-size: 44px; }
+
+        .page {
+            min-height: 100vh;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .site-header {
+            width: min(100%, 1080px);
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .brand {
+            color: white;
+            font-size: 25px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            text-decoration: none;
+        }
+
+        .header-links {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-links a {
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .header-links a:hover,
+        .header-links a:focus-visible {
+            text-decoration: underline;
+        }
+
+        main {
+            width: min(100%, 920px);
+            margin: auto;
+            padding: 64px 0;
+        }
+
+        .hero {
+            padding: clamp(28px, 6vw, 64px);
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.82);
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+            text-align: center;
+        }
+
+        .eyebrow {
+            margin: 0 0 16px;
+            color: #b8e986;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 1.6px;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            max-width: 720px;
+            margin: 0 auto;
+            font-size: clamp(38px, 7vw, 64px);
+            line-height: 1.08;
+        }
+
+        .intro {
+            max-width: 650px;
+            margin: 22px auto 0;
+            color: #e4e4e4;
+            font-size: clamp(16px, 2.4vw, 19px);
+            line-height: 1.65;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-top: 30px;
+        }
+
+        .button {
+            min-width: 160px;
+            padding: 13px 20px;
+            border: 2px solid white;
+            border-radius: 6px;
+            background: white;
+            color: #111;
+            font-size: 15px;
+            font-weight: 700;
+            text-decoration: none;
+            transition: background-color 150ms ease, color 150ms ease;
+        }
+
+        .button:hover,
+        .button:focus-visible {
+            background: #ddd;
+        }
+
+        .button-secondary {
+            background: transparent;
+            color: white;
+        }
+
+        .button-secondary:hover,
+        .button-secondary:focus-visible {
+            background: white;
+            color: #111;
+        }
+
+        .how-it-works {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 28px;
+            text-align: left;
+        }
+
+        .step {
+            padding: 22px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.72);
+        }
+
+        .step-number {
+            display: block;
+            margin-bottom: 10px;
+            color: #b8e986;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .step h2 {
+            margin: 0 0 9px;
+            font-size: 19px;
+        }
+
+        .step p {
+            margin: 0;
+            color: #e4e4e4;
+            font-size: 15px;
+            line-height: 1.55;
+        }
+
+        .note {
+            margin: 20px 0 0;
+            color: white;
+            font-size: 13px;
+            line-height: 1.5;
+            text-align: center;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+        }
+
+        @media (max-width: 640px) {
+            .page {
+                padding: 18px;
+            }
+
+            main {
+                padding: 42px 0;
+            }
+
+            .how-it-works {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .header-links {
+                gap: 14px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            body,
+            .produce {
+                animation: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="produce" aria-hidden="true">🍎</div>
+    <div class="produce" aria-hidden="true">🥦</div>
+    <div class="produce" aria-hidden="true">🍌</div>
+    <div class="produce" aria-hidden="true">🥕</div>
+    <div class="produce" aria-hidden="true">🍇</div>
+    <div class="produce" aria-hidden="true">🍅</div>
+    <div class="produce" aria-hidden="true">🍊</div>
+    <div class="produce" aria-hidden="true">🥒</div>
+
+    <div class="page">
+        <header class="site-header">
+            <a class="brand" href="index.html" aria-label="Bitewise home">Bitewise</a>
+            <nav class="header-links" aria-label="Account">
+                <a href="signin.html">Sign in</a>
+                <a href="createaccount.html">Create account</a>
+            </nav>
+        </header>
+
+        <main>
+            <section class="hero" aria-labelledby="hero-title">
+                <p class="eyebrow">Grocery shopping, made personal</p>
+                <h1 id="hero-title">Feel good about what goes in your cart.</h1>
+                <p class="intro">
+                    Bitewise helps you choose groceries that fit your dietary needs.
+                    Set up your food profile, then check items to spot ingredients
+                    that may not be right for you.
+                </p>
+                <div class="actions">
+                    <a class="button" href="createaccount.html">Get started</a>
+                    <a class="button button-secondary" href="signin.html">Sign in</a>
+                </div>
+            </section>
+
+            <section class="how-it-works" aria-label="How Bitewise works">
+                <article class="step">
+                    <span class="step-number">Step 1</span>
+                    <h2>Tell us what matters</h2>
+                    <p>Add your dietary preferences and the ingredients or allergens you want to avoid.</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">Step 2</span>
+                    <h2>Scan your food</h2>
+                    <p>Check a food item so its ingredients can be reviewed against your personal profile.</p>
+                </article>
+                <article class="step">
+                    <span class="step-number">Step 3</span>
+                    <h2>Choose with confidence</h2>
+                    <p>See potential matches for your needs and make a more informed choice before you buy.</p>
+                </article>
+            </section>
+
+            <p class="note">Bitewise is here to support your choices. Always check product packaging for the latest ingredient and allergen information.</p>
+        </main>
+    </div>
+</body>
+</html>
