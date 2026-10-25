@@ -104,6 +104,8 @@ The API starts at `http://localhost:8080`.
 
 Serve the repository root (`index.html`, `signin.html`, `createaccount.html`, and `home.html`) with VS Code Live Server. Open the Live Server URL, such as `http://127.0.0.1:5500/index.html`; do not open the HTML files directly with a `file://` URL because browser security blocks API requests from that origin. If VS Code Live Server chooses port `5501`, that origin is also allowed by default.
 
+On the dashboard, choose **Scan barcode with camera** to look up a product and check its Open Food Facts data against the active profile. Camera access requires a secure origin (HTTPS or `localhost`); if the browser cannot access a camera, enter the barcode manually instead.
+
 The frontend API URL is set in the repository-root `api-config.js` and defaults to port `8080` on the same hostname as the frontend. Keeping the hostname consistent (both `localhost` or both `127.0.0.1`) lets the browser send the HTTP-only refresh cookie. If the backend is running on another port, change the port in that file to match. The backend's default CORS allowlist includes the common Live Server origins on ports `5500` and `5501`; for another frontend origin, set `CORS_ALLOWED_ORIGINS` before starting Spring Boot, for example:
 
 ```powershell

@@ -315,6 +315,41 @@
             color: #173329;
         }
 
+        .camera-dialog {
+            width: min(620px, calc(100% - 24px));
+        }
+
+        .camera-preview {
+            width: 100%;
+            max-height: 55vh;
+            margin-top: 16px;
+            border-radius: 10px;
+            background: #10251a;
+            object-fit: contain;
+        }
+
+        .camera-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .camera-actions .field {
+            flex: 1 1 220px;
+            margin: 0;
+        }
+
+        .product-image {
+            display: block;
+            max-width: min(100%, 240px);
+            max-height: 200px;
+            margin: 12px 0;
+            border-radius: 8px;
+            object-fit: contain;
+        }
+
         @media (max-width: 640px) {
             .site-header {
                 align-items: flex-start;
@@ -373,6 +408,9 @@
             <h2 id="scanTitle">Check an item</h2>
             <p class="subtle">Enter the product name and copy the ingredients from its package. The results are based only on the text you provide.</p>
             <form id="scanForm">
+                <div class="form-actions">
+                    <button id="openCameraButton" type="button">Scan barcode with camera</button>
+                </div>
                 <div class="field">
                     <label for="productName">Product name <span class="subtle">(optional)</span></label>
                     <input id="productName" name="productName" maxlength="120" autocomplete="off">
@@ -425,6 +463,25 @@
         </div>
     </dialog>
 
+    <dialog id="cameraDialog" class="camera-dialog" aria-labelledby="cameraDialogTitle">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h2 id="cameraDialogTitle">Scan a product barcode</h2>
+                <button id="closeCameraButton" class="close-button" type="button" aria-label="Close camera">Close</button>
+            </div>
+            <p class="subtle">Allow camera access and hold the product barcode steady in view. Camera access requires HTTPS, or localhost.</p>
+            <video id="cameraPreview" class="camera-preview" autoplay muted playsinline aria-label="Live camera preview"></video>
+            <p id="cameraMessage" class="message" role="status" aria-live="polite">Starting camera...</p>
+            <div class="camera-actions">
+                <div class="field">
+                    <label for="manualBarcode">Or enter the barcode</label>
+                    <input id="manualBarcode" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="8 to 14 digits">
+                </div>
+                <button id="lookupBarcodeButton" type="button">Look up barcode</button>
+            </div>
+        </div>
+    </dialog>
+
     <script src="api-config.js"></script>
     <script src="auth.js"></script>
     <script>
@@ -464,8 +521,17 @@
         const scanButton = document.getElementById('scanButton');
         const scanMessage = document.getElementById('scanMessage');
         const scanResult = document.getElementById('scanResult');
+        const cameraDialog = document.getElementById('cameraDialog');
+        const cameraPreview = document.getElementById('cameraPreview');
+        const cameraMessage = document.getElementById('cameraMessage');
+        const manualBarcode = document.getElementById('manualBarcode');
         let profiles = [];
         let activeProfile = null;
+        let cameraStream = null;
+        let cameraAnimationFrame = null;
+        let barcodeDetector = null;
+        let lastFallbackScan = 0;
+        let barcodeLookupInProgress = false;
 
         function setMessage(element, message, success = false) {
             element.textContent = message;
@@ -595,8 +661,184 @@
             scanResult.hidden = false;
         }
 
+        function stopCamera() {
+            if (cameraAnimationFrame !== null) {
+                cancelAnimationFrame(cameraAnimationFrame);
+                cameraAnimationFrame = null;
+            }
+            if (cameraStream) {
+                for (const track of cameraStream.getTracks()) {
+                    track.stop();
+                }
+                cameraStream = null;
+            }
+            cameraPreview.srcObject = null;
+        }
+
+        function readCameraFrame() {
+            if (!cameraPreview.videoWidth || !cameraPreview.videoHeight) {
+                return null;
+            }
+            const scale = Math.min(1, 960 / cameraPreview.videoWidth);
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(cameraPreview.videoWidth * scale);
+            canvas.height = Math.round(cameraPreview.videoHeight * scale);
+            canvas.getContext('2d').drawImage(cameraPreview, 0, 0, canvas.width, canvas.height);
+            return canvas;
+        }
+
+        async function lookupBarcode(barcode) {
+            const normalizedBarcode = barcode.trim();
+            if (!/^\d{8,14}$/.test(normalizedBarcode)) {
+                setMessage(cameraMessage, 'Enter a barcode containing 8 to 14 digits.');
+                return;
+            }
+            if (barcodeLookupInProgress) {
+                return;
+            }
+            barcodeLookupInProgress = true;
+            stopCamera();
+            cameraDialog.close();
+            scanResult.hidden = true;
+            setMessage(scanMessage, 'Looking up product and checking its label...');
+            try {
+                const query = new URLSearchParams();
+                if (activeProfile) {
+                    query.set('profileId', activeProfile.id);
+                }
+                const queryString = query.toString();
+                const suffix = queryString ? `?${queryString}` : '';
+                const result = await BitewiseAuth.requestJson(
+                    `/api/products/${encodeURIComponent(normalizedBarcode)}/analysis${suffix}`
+                );
+                const product = result.product;
+                document.getElementById('productName').value = product.productName || '';
+                document.getElementById('ingredients').value = product.ingredients || '';
+                showScanResult(result.analysis);
+                const metadata = document.createElement('p');
+                metadata.textContent = `Barcode: ${product.barcode}`;
+                scanResult.insertBefore(metadata, scanResult.children[1] ?? null);
+                if (product.imageUrl) {
+                    const image = document.createElement('img');
+                    image.className = 'product-image';
+                    image.src = product.imageUrl;
+                    image.alt = product.productName ? `${product.productName} product image` : 'Product image';
+                    image.loading = 'lazy';
+                    scanResult.insertBefore(image, scanResult.children[1] ?? null);
+                }
+                setMessage(scanMessage, 'Barcode lookup and ingredient check complete.', true);
+            } catch (error) {
+                setMessage(scanMessage, error instanceof Error ? error.message : 'Could not look up this barcode.');
+            } finally {
+                barcodeLookupInProgress = false;
+            }
+        }
+
+        async function scanCameraFrame() {
+            if (!cameraStream) {
+                return;
+            }
+            const now = performance.now();
+            if (barcodeDetector) {
+                try {
+                    const detections = await barcodeDetector.detect(cameraPreview);
+                    const match = detections.find(item => /^\d{8,14}$/.test(item.rawValue));
+                    if (match) {
+                        await lookupBarcode(match.rawValue);
+                        return;
+                    }
+                } catch {
+                    barcodeDetector = null;
+                    setMessage(cameraMessage, 'Using image-based barcode scanning...');
+                }
+            }
+            if (!barcodeDetector && now - lastFallbackScan >= 1200 && cameraPreview.readyState >= 2) {
+                lastFallbackScan = now;
+                try {
+                    const canvas = readCameraFrame();
+                    if (canvas) {
+                        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                        if (blob) {
+                            const formData = new FormData();
+                            formData.append('file', blob, 'camera-scan.jpg');
+                            const product = await BitewiseAuth.requestJson('/api/products/scan', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            await lookupBarcode(product.barcode);
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : '';
+                    if (message && !message.includes('No supported barcode')) {
+                        setMessage(cameraMessage, message);
+                    }
+                }
+            }
+            cameraAnimationFrame = requestAnimationFrame(scanCameraFrame);
+        }
+
+        async function startCamera() {
+            if (!navigator.mediaDevices?.getUserMedia) {
+                setMessage(cameraMessage, 'Camera access is unavailable. Use HTTPS or localhost, or enter the barcode below.');
+                return;
+            }
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: { facingMode: { ideal: 'environment' } }
+                });
+                if (!cameraDialog.open) {
+                    stopCamera();
+                    return;
+                }
+                cameraPreview.srcObject = cameraStream;
+                await cameraPreview.play();
+                barcodeDetector = null;
+                if ('BarcodeDetector' in window) {
+                    try {
+                        const supported = await BarcodeDetector.getSupportedFormats();
+                        const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code']
+                            .filter(format => supported.includes(format));
+                        if (formats.length) {
+                            barcodeDetector = new BarcodeDetector({ formats });
+                        }
+                    } catch {
+                        barcodeDetector = null;
+                    }
+                }
+                lastFallbackScan = 0;
+                setMessage(cameraMessage, barcodeDetector
+                    ? 'Camera ready. Center the product barcode in the frame.'
+                    : 'Camera ready. Scanning barcode images...');
+                cameraAnimationFrame = requestAnimationFrame(scanCameraFrame);
+            } catch (error) {
+                stopCamera();
+                const message = error instanceof Error ? error.message : 'Camera access could not be started.';
+                setMessage(cameraMessage, `${message} You can enter the barcode below instead.`);
+            }
+        }
+
         addCheckboxOptions(document.getElementById('allergyOptions'), 'allergies', ALLERGIES);
         addCheckboxOptions(document.getElementById('restrictionOptions'), 'restrictions', RESTRICTIONS);
+
+        document.getElementById('openCameraButton').addEventListener('click', () => {
+            setMessage(cameraMessage, 'Starting camera...');
+            cameraDialog.showModal();
+            startCamera();
+        });
+        document.getElementById('closeCameraButton').addEventListener('click', () => cameraDialog.close());
+        cameraDialog.addEventListener('close', stopCamera);
+        document.getElementById('lookupBarcodeButton').addEventListener('click', () => {
+            lookupBarcode(manualBarcode.value);
+        });
+        manualBarcode.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                lookupBarcode(manualBarcode.value);
+            }
+        });
 
         profileButton.addEventListener('click', () => openProfileEditor(activeProfile));
         document.getElementById('closeProfileDialog').addEventListener('click', () => profileDialog.close());
