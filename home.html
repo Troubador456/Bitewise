@@ -341,6 +341,51 @@
             margin: 0;
         }
 
+        .manual-entry {
+            margin-top: 20px;
+            border-top: 1px solid #d8e5d9;
+            padding-top: 16px;
+        }
+
+        .manual-entry summary {
+            color: #176b48;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .upload-button {
+            display: inline-block;
+            border: 1px solid #176b48;
+            border-radius: 8px;
+            padding: 10px 15px;
+            background: white;
+            color: #176b48;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .upload-button:hover {
+            background: #edf6ef;
+            color: #10583a;
+        }
+
+        .visually-hidden-input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .visually-hidden-input:focus-visible + label {
+            outline: 3px solid #f1b84b;
+            outline-offset: 2px;
+        }
+
         .product-image {
             display: block;
             max-width: min(100%, 240px);
@@ -406,21 +451,27 @@
 
         <section class="card" aria-labelledby="scanTitle">
             <h2 id="scanTitle">Check an item</h2>
-            <p class="subtle">Enter the product name and copy the ingredients from its package. The results are based only on the text you provide.</p>
-            <form id="scanForm">
-                <div class="form-actions">
-                    <button id="openCameraButton" type="button">Scan barcode with camera</button>
-                </div>
-                <div class="field">
-                    <label for="productName">Product name <span class="subtle">(optional)</span></label>
-                    <input id="productName" name="productName" maxlength="120" autocomplete="off">
-                </div>
-                <div class="field">
-                    <label for="ingredients">Ingredients from the label</label>
-                    <textarea id="ingredients" name="ingredients" required placeholder="For example: Oats, peanut butter, whey protein, salt. May contain sesame."></textarea>
-                </div>
-                <button id="scanButton" type="submit">Check ingredients</button>
-            </form>
+            <p class="subtle">Scan the product barcode with your camera or upload a barcode image to look up product information.</p>
+            <div class="form-actions">
+                <button id="openCameraButton" type="button">Scan barcode with camera</button>
+                <input class="visually-hidden-input" id="barcodeImageInput" type="file" accept="image/*" capture="environment">
+                <label class="upload-button" for="barcodeImageInput">Upload barcode image</label>
+            </div>
+            <details class="manual-entry">
+                <summary>Enter ingredients manually (alternative)</summary>
+                <p class="subtle">Use this option if the product is not listed or you cannot scan its barcode. Results are based only on the text you provide.</p>
+                <form id="scanForm">
+                    <div class="field">
+                        <label for="productName">Product name <span class="subtle">(optional)</span></label>
+                        <input id="productName" name="productName" maxlength="120" autocomplete="off">
+                    </div>
+                    <div class="field">
+                        <label for="ingredients">Ingredients from the label</label>
+                        <textarea id="ingredients" name="ingredients" required placeholder="For example: Oats, peanut butter, whey protein, salt. May contain sesame."></textarea>
+                    </div>
+                    <button id="scanButton" type="submit">Check ingredients</button>
+                </form>
+            </details>
             <p id="scanMessage" class="message" role="status" aria-live="polite"></p>
             <section id="scanResult" class="result" aria-live="polite" hidden></section>
         </section>
@@ -525,6 +576,8 @@
         const cameraPreview = document.getElementById('cameraPreview');
         const cameraMessage = document.getElementById('cameraMessage');
         const manualBarcode = document.getElementById('manualBarcode');
+        const barcodeImageInput = document.getElementById('barcodeImageInput');
+        const uploadButton = document.querySelector('label[for="barcodeImageInput"]');
         let profiles = [];
         let activeProfile = null;
         let cameraStream = null;
@@ -832,6 +885,42 @@
         cameraDialog.addEventListener('close', stopCamera);
         document.getElementById('lookupBarcodeButton').addEventListener('click', () => {
             lookupBarcode(manualBarcode.value);
+        });
+        barcodeImageInput.addEventListener('change', async () => {
+            const file = barcodeImageInput.files?.[0];
+            if (!file) {
+                return;
+            }
+            if (file.type && !file.type.startsWith('image/')) {
+                setMessage(scanMessage, 'Choose an image file that clearly shows the complete barcode.');
+                barcodeImageInput.value = '';
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                setMessage(scanMessage, 'The barcode image must be 10 MB or smaller.');
+                barcodeImageInput.value = '';
+                return;
+            }
+            barcodeImageInput.disabled = true;
+            uploadButton.setAttribute('aria-disabled', 'true');
+            setMessage(scanMessage, 'Reading barcode image and looking up product...');
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const product = await BitewiseAuth.requestJson('/api/products/scan', {
+                    method: 'POST',
+                    body: formData
+                });
+                await lookupBarcode(product.barcode);
+            } catch (error) {
+                setMessage(scanMessage, error instanceof Error
+                    ? error.message
+                    : 'Could not read the barcode image. Try a clear image with the full barcode visible.');
+            } finally {
+                barcodeImageInput.value = '';
+                barcodeImageInput.disabled = false;
+                uploadButton.removeAttribute('aria-disabled');
+            }
         });
         manualBarcode.addEventListener('keydown', event => {
             if (event.key === 'Enter') {
