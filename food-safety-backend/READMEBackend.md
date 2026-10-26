@@ -164,6 +164,8 @@ Profile IDs are UUIDs returned by create/list/get. Users can only access their o
 
 `profileId` is optional. Replace the example UUID with an ID returned by `POST /api/profiles`. Without it, no allergen matching is performed by this ingredient-text endpoint.
 
+Ingredient checks are also recorded in the authenticated user's recent scan history. Because a keyword or community-data check cannot certify a product as safe, history records `WARNING` unless an allergy conflict is found, in which case it records `UNSAFE`; it does not record `SAFE`.
+
 ### Look up and analyze a barcode
 `GET /api/products/{barcode}` returns the product name, ingredient text, image URL, and Open Food Facts allergen tags. The barcode must contain 8–14 digits.
 
@@ -180,6 +182,15 @@ curl.exe -X POST "http://localhost:8080/api/products/scan" `
 ```
 
 This scan endpoint only reads the barcode; it does not upload the image to Open Food Facts. If the barcode is blurry, cropped, or unsupported, retake a clear image with the entire barcode visible. If it decodes but Open Food Facts has no matching product, the API returns `404`.
+
+### Save products and view scan history
+
+- `POST /api/saved-products` saves or updates a product for the signed-in account. Send `barcode`, `productName`, and optional `ingredients` as JSON. Saving an existing barcode updates its stored details rather than creating a duplicate.
+- `GET /api/saved-products` lists the signed-in user's saved products.
+- `DELETE /api/saved-products/{id}` removes one of the signed-in user's saved products.
+- `GET /api/scan-history` returns up to the user's 20 most recent barcode and ingredient checks.
+
+These records belong to `auth_users` and are deleted when the account is deleted. Food allergies and dietary restrictions remain attached to `food_profiles`, so users can keep different sets of needs without a second account-level restriction system.
 
 ### Upload a product image
 `POST /api/products/{barcode}/images?imageField=front` accepts a multipart request containing a `file` image. `imageField` may be `front` (default), `ingredients`, `nutrition`, or `other`. JPEG and PNG files up to 10 MB are accepted.

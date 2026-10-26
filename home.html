@@ -475,6 +475,19 @@
             <p id="scanMessage" class="message" role="status" aria-live="polite"></p>
             <section id="scanResult" class="result" aria-live="polite" hidden></section>
         </section>
+        <section class="card" aria-labelledby="productActivityTitle">
+            <h2 id="productActivityTitle">Your products</h2>
+            <div class="form-grid">
+                <section aria-labelledby="savedProductsTitle">
+                    <h3 id="savedProductsTitle">Saved products</h3>
+                    <div id="savedProductsList" aria-live="polite"><p class="subtle">Loading saved products...</p></div>
+                </section>
+                <section aria-labelledby="scanHistoryTitle">
+                    <h3 id="scanHistoryTitle">Recent checks</h3>
+                    <div id="scanHistoryList" aria-live="polite"><p class="subtle">Loading recent checks...</p></div>
+                </section>
+            </div>
+        </section>
         <p class="disclaimer">Bitewise uses basic keyword matching, not a certified food-safety system. It cannot verify the label or rule out cross-contact. Always check the package and contact the manufacturer about serious allergies.</p>
     </main>
 
@@ -578,6 +591,8 @@
         const manualBarcode = document.getElementById('manualBarcode');
         const barcodeImageInput = document.getElementById('barcodeImageInput');
         const uploadButton = document.querySelector('label[for="barcodeImageInput"]');
+        const savedProductsList = document.getElementById('savedProductsList');
+        const scanHistoryList = document.getElementById('scanHistoryList');
         let profiles = [];
         let activeProfile = null;
         let cameraStream = null;
@@ -585,6 +600,7 @@
         let barcodeDetector = null;
         let lastFallbackScan = 0;
         let barcodeLookupInProgress = false;
+        let productSaveInProgress = false;
 
         function setMessage(element, message, success = false) {
             element.textContent = message;
@@ -694,7 +710,7 @@
             container.append(list);
         }
 
-        function showScanResult(result) {
+        function showScanResult(result, product = null) {
             scanResult.replaceChildren();
             const heading = document.createElement('h2');
             heading.textContent = result.productName || 'Ingredient check';
@@ -711,7 +727,126 @@
                 'No ingredient terms matched.');
             appendResultList(scanResult, 'Important uncertainties', result.uncertainties ?? [],
                 'No additional uncertainty notes.');
+            if (product?.barcode) {
+                const actions = document.createElement('div');
+                actions.className = 'form-actions';
+                const saveButton = document.createElement('button');
+                saveButton.type = 'button';
+                saveButton.textContent = 'Save product';
+                saveButton.addEventListener('click', async () => {
+                    if (productSaveInProgress) {
+                        return;
+                    }
+                    productSaveInProgress = true;
+                    saveButton.disabled = true;
+                    try {
+                        await BitewiseAuth.requestJson('/api/saved-products', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                barcode: product.barcode,
+                                productName: product.productName || 'Unnamed product',
+                                ingredients: product.ingredients || ''
+                            })
+                        });
+                        saveButton.textContent = 'Product saved';
+                        try {
+                            await loadProductActivity();
+                        } catch (error) {
+                            setMessage(scanMessage, `Product saved, but the product list could not refresh: ${
+                                error instanceof Error ? error.message : 'unknown error'
+                            }`);
+                        }
+                    } catch (error) {
+                        saveButton.disabled = false;
+                        setMessage(scanMessage, error instanceof Error ? error.message : 'Could not save this product.');
+                    } finally {
+                        productSaveInProgress = false;
+                    }
+                });
+                actions.append(saveButton);
+                scanResult.append(actions);
+            }
             scanResult.hidden = false;
+        }
+
+        function renderSavedProducts(products) {
+            savedProductsList.replaceChildren();
+            if (!products.length) {
+                const empty = document.createElement('p');
+                empty.className = 'subtle';
+                empty.textContent = 'Products you save after a barcode check will appear here.';
+                savedProductsList.append(empty);
+                return;
+            }
+            const list = document.createElement('ul');
+            for (const product of products) {
+                const item = document.createElement('li');
+                const name = document.createElement('button');
+                name.type = 'button';
+                name.className = 'secondary-button';
+                name.textContent = product.productName;
+                name.addEventListener('click', () => lookupBarcode(product.barcode));
+                const details = document.createElement('span');
+                details.textContent = ` Barcode: ${product.barcode}`;
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'secondary-button';
+                remove.textContent = 'Remove';
+                remove.setAttribute('aria-label', `Remove ${product.productName} from saved products`);
+                remove.addEventListener('click', async () => {
+                    remove.disabled = true;
+                    try {
+                        await BitewiseAuth.requestJson(`/api/saved-products/${encodeURIComponent(product.id)}`, {
+                            method: 'DELETE'
+                        });
+                        remove.textContent = 'Removed';
+                        try {
+                            await loadProductActivity();
+                        } catch (error) {
+                            setMessage(scanMessage, `Product removed, but the product list could not refresh: ${
+                                error instanceof Error ? error.message : 'unknown error'
+                            }`);
+                        }
+                    } catch (error) {
+                        remove.disabled = false;
+                        setMessage(scanMessage, error instanceof Error ? error.message : 'Could not remove saved product.');
+                    }
+                });
+                item.append(name, details, document.createTextNode(' '), remove);
+                list.append(item);
+            }
+            savedProductsList.append(list);
+        }
+
+        function renderScanHistory(history) {
+            scanHistoryList.replaceChildren();
+            if (!history.length) {
+                const empty = document.createElement('p');
+                empty.className = 'subtle';
+                empty.textContent = 'Your ingredient and barcode checks will appear here.';
+                scanHistoryList.append(empty);
+                return;
+            }
+            const list = document.createElement('ul');
+            for (const scan of history) {
+                const item = document.createElement('li');
+                const result = scan.safetyResult === 'UNSAFE'
+                    ? 'Potential allergy conflict'
+                    : 'Review label; no safety guarantee';
+                const barcode = scan.barcode ? ` · Barcode ${scan.barcode}` : '';
+                item.textContent = `${scan.productName}: ${result}${barcode} · ${new Date(scan.scannedAt).toLocaleString()}`;
+                list.append(item);
+            }
+            scanHistoryList.append(list);
+        }
+
+        async function loadProductActivity() {
+            const [products, history] = await Promise.all([
+                BitewiseAuth.requestJson('/api/saved-products'),
+                BitewiseAuth.requestJson('/api/scan-history')
+            ]);
+            renderSavedProducts(products);
+            renderScanHistory(history);
         }
 
         function stopCamera() {
@@ -767,7 +902,7 @@
                 const product = result.product;
                 document.getElementById('productName').value = product.productName || '';
                 document.getElementById('ingredients').value = product.ingredients || '';
-                showScanResult(result.analysis);
+                showScanResult(result.analysis, product);
                 const metadata = document.createElement('p');
                 metadata.textContent = `Barcode: ${product.barcode}`;
                 scanResult.insertBefore(metadata, scanResult.children[1] ?? null);
@@ -780,6 +915,13 @@
                     scanResult.insertBefore(image, scanResult.children[1] ?? null);
                 }
                 setMessage(scanMessage, 'Barcode lookup and ingredient check complete.', true);
+                try {
+                    await loadProductActivity();
+                } catch (error) {
+                    setMessage(scanMessage, `Barcode check completed, but recent activity could not refresh: ${
+                        error instanceof Error ? error.message : 'unknown error'
+                    }`);
+                }
             } catch (error) {
                 setMessage(scanMessage, error instanceof Error ? error.message : 'Could not look up this barcode.');
             } finally {
@@ -1000,6 +1142,13 @@
                 });
                 showScanResult(result);
                 setMessage(scanMessage, 'Ingredient check complete.', true);
+                try {
+                    await loadProductActivity();
+                } catch (error) {
+                    setMessage(scanMessage, `Ingredient check completed, but recent activity could not refresh: ${
+                        error instanceof Error ? error.message : 'unknown error'
+                    }`);
+                }
             } catch (error) {
                 setMessage(scanMessage, error instanceof Error ? error.message : 'Could not check these ingredients.');
             } finally {
@@ -1014,6 +1163,13 @@
             }
             document.getElementById('accountLabel').textContent = user.displayName;
             await loadProfiles();
+            try {
+                await loadProductActivity();
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'unknown error';
+                savedProductsList.textContent = `Could not load saved products: ${message}`;
+                scanHistoryList.textContent = `Could not load recent checks: ${message}`;
+            }
         }
 
         startDashboard().catch(error => {

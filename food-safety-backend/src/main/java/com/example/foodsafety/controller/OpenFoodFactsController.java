@@ -5,6 +5,7 @@ import com.example.foodsafety.auth.CurrentUserService;
 import com.example.foodsafety.service.FoodAnalysisService;
 import com.example.foodsafety.service.BarcodeImageService;
 import com.example.foodsafety.service.OpenFoodFactsService;
+import com.example.foodsafety.service.ProductLibraryService;
 import com.example.foodsafety.service.ProfileService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +19,7 @@ public class OpenFoodFactsController {
     private final BarcodeImageService barcodeImageService;
     private final FoodAnalysisService analysisService;
     private final ProfileService profileService;
+    private final ProductLibraryService productLibrary;
     private final CurrentUserService currentUser;
 
     public OpenFoodFactsController(
@@ -25,12 +27,14 @@ public class OpenFoodFactsController {
             BarcodeImageService barcodeImageService,
             FoodAnalysisService analysisService,
             ProfileService profileService,
+            ProductLibraryService productLibrary,
             CurrentUserService currentUser
     ) {
         this.openFoodFactsService = openFoodFactsService;
         this.barcodeImageService = barcodeImageService;
         this.analysisService = analysisService;
         this.profileService = profileService;
+        this.productLibrary = productLibrary;
         this.currentUser = currentUser;
     }
 
@@ -54,6 +58,7 @@ public class OpenFoodFactsController {
         UserFoodProfile profile = findProfile(profileId);
         AnalysisResponse analysis = analysisService.analyzeProduct(
                 product.productName(), product.ingredients(), product.allergenTags(), profile);
+        productLibrary.recordScan(currentUser.id(), product.barcode(), analysis);
         return new ProductAnalysisResponse(product, analysis);
     }
 

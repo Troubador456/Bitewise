@@ -4,6 +4,8 @@ import com.example.foodsafety.auth.AuthUser;
 import com.example.foodsafety.auth.AuthUserRepository;
 import com.example.foodsafety.model.FoodProfile;
 import com.example.foodsafety.repository.FoodProfileRepository;
+import com.example.foodsafety.repository.SavedProductRepository;
+import com.example.foodsafety.repository.ScanHistoryRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +45,12 @@ class AuthenticatedProfileApiTest {
     private FoodProfileRepository profiles;
 
     @Autowired
+    private SavedProductRepository savedProducts;
+
+    @Autowired
+    private ScanHistoryRepository scanHistory;
+
+    @Autowired
     private JwtEncoder jwtEncoder;
 
     @Autowired
@@ -51,6 +59,8 @@ class AuthenticatedProfileApiTest {
     @BeforeEach
     void clearProfiles() {
         profiles.deleteAll();
+        savedProducts.deleteAll();
+        scanHistory.deleteAll();
     }
 
     @Test
@@ -142,6 +152,86 @@ class AuthenticatedProfileApiTest {
                 .andExpect(status().isNotFound());
 
         org.assertj.core.api.Assertions.assertThat(profiles.existsById(profile.getId())).isTrue();
+    }
+
+    @Test
+    void usersCanSaveProductsAndOnlySeeTheirOwnSavedProducts() throws Exception {
+        AuthUser owner = createVerifiedUser();
+        AuthUser otherUser = createVerifiedUser();
+        String ownerToken = accessToken(owner);
+
+        mockMvc.perform(post("/api/saved-products")
+                        .header("Authorization", bearer(ownerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "barcode": "0028400642033",
+                                  "productName": "Example snack",
+                                  "ingredients": "corn, salt"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.barcode").value("0028400642033"))
+                .andExpect(jsonPath("$.productName").value("Example snack"));
+
+        String updated = mockMvc.perform(post("/api/saved-products")
+                        .header("Authorization", bearer(ownerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "barcode": "0028400642033",
+                                  "productName": "Updated snack",
+                                  "ingredients": "corn, salt, paprika"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.productName").value("Updated snack"))
+                .andReturn().getResponse().getContentAsString();
+        String productId = objectMapper.readTree(updated).path("id").asText();
+
+        mockMvc.perform(get("/api/saved-products")
+                        .header("Authorization", bearer(accessToken(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+        mockMvc.perform(get("/api/saved-products")
+                        .header("Authorization", bearer(accessToken(otherUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(delete("/api/saved-products/{id}", productId)
+                        .header("Authorization", bearer(accessToken(otherUser))))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/saved-products/{id}", productId)
+                        .header("Authorization", bearer(ownerToken)))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void ingredientChecksAreRecordedInPrivateScanHistory() throws Exception {
+        AuthUser owner = createVerifiedUser();
+        AuthUser otherUser = createVerifiedUser();
+        String ownerToken = accessToken(owner);
+
+        mockMvc.perform(post("/api/analyze")
+                        .header("Authorization", bearer(ownerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productName": "Test cereal",
+                                  "ingredients": "oats, salt"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/scan-history")
+                        .header("Authorization", bearer(ownerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].productName").value("Test cereal"))
+                .andExpect(jsonPath("$[0].safetyResult").value("WARNING"));
+        mockMvc.perform(get("/api/scan-history")
+                        .header("Authorization", bearer(accessToken(otherUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     private AuthUser createVerifiedUser() {

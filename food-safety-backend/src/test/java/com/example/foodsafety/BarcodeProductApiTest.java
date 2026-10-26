@@ -6,6 +6,7 @@ import com.example.foodsafety.model.OpenFoodFactsProduct;
 import com.example.foodsafety.service.BarcodeImageService;
 import com.example.foodsafety.service.FoodAnalysisService;
 import com.example.foodsafety.service.OpenFoodFactsService;
+import com.example.foodsafety.service.ProductLibraryService;
 import com.example.foodsafety.service.ProfileService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -27,12 +28,14 @@ class BarcodeProductApiTest {
     private final OpenFoodFactsService openFoodFactsService = mock(OpenFoodFactsService.class);
     private final BarcodeImageService barcodeImageService = mock(BarcodeImageService.class);
     private final ProfileService profileService = mock(ProfileService.class);
+    private final ProductLibraryService productLibrary = mock(ProductLibraryService.class);
     private final CurrentUserService currentUser = mock(CurrentUserService.class);
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new OpenFoodFactsController(
             openFoodFactsService,
             barcodeImageService,
             new FoodAnalysisService(),
             profileService,
+            productLibrary,
             currentUser
     )).build();
 
