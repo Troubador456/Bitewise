@@ -34,7 +34,7 @@ The manual checker uses ingredient text and a limited keyword list. Barcode-base
 - **Barcode decoding:** ZXing
 - **Product catalog:** Open Food Facts
 - **Local email testing:** Mailpit
-- **Deployment:** Docker web service on Render; the Blueprint expects a separate PostgreSQL database
+- **Deployment:** Vercel Container Runtime using the root Dockerfile; PostgreSQL is hosted separately
 
 In production the frontend files are packaged into the Spring Boot application and served from the same origin as the API. This keeps the browser UI, API requests, and refresh cookie on one origin.
 
@@ -50,8 +50,7 @@ In production the frontend files are packaged into the Spring Boot application a
 ├── auth.js                    # Browser authentication helpers
 ├── assets/
 │   └── bitewise-logo.png
-├── Dockerfile                 # Multi-stage production image
-├── render.yaml                # Render Blueprint for the web service
+├── Dockerfile                 # Multi-stage production image for Vercel Container Runtime
 └── food-safety-backend/
     ├── compose.yaml           # Local PostgreSQL and Mailpit
     ├── pom.xml
@@ -144,16 +143,13 @@ Useful endpoint groups include:
 - `/api/saved-products` and `/api/scan-history` — the signed-in user's product library and recent checks
 - `/health` — public application and database health check
 
-## Deploy to Render
+## Deploy to Vercel
 
-This repository includes a root-level [`render.yaml`](render.yaml) Blueprint and [`Dockerfile`](Dockerfile). The Blueprint defines a free Render web service that serves both the frontend and API. It does **not** create a database, and a checked-in Blueprint does not by itself create a live service.
+The root [`Dockerfile`](Dockerfile) builds the Spring Boot API together with the static frontend. Vercel's Container Runtime can run this image, keeping the UI, API, and refresh cookie on one origin. The Container Runtime is currently in beta and follows Vercel Functions' runtime limits and pricing, including a 4.5 MB request-body limit; review Vercel's [Container Runtime documentation](https://vercel.com/docs/functions/runtimes/container) before deploying. Barcode and product-image uploads are capped at 4 MB to stay within that limit. Vercel does not provision this app's PostgreSQL database.
 
-For a demo, the documented setup uses a separate PostgreSQL provider such as Neon. Review the provider's current limits and retention policies before storing data you need to keep.
-
-1. Push the repository to GitHub.
-2. Create a PostgreSQL database and prepare its host, database name, username, and password.
-3. In the [Render Dashboard](https://dashboard.render.com/), create a Blueprint from `Troubador456/Bitewise` and select the branch containing `render.yaml`.
-4. Set the Blueprint's environment variables in Render:
+1. Push the repository to GitHub and import it as a project in the [Vercel Dashboard](https://vercel.com/dashboard). Use the repository root as the project root and select the **Container** framework preset if Vercel does not detect the root `Dockerfile` automatically.
+2. Create a managed PostgreSQL database, such as Neon, and prepare its JDBC URL, database username, and password. Use a provider-supported TLS connection URL.
+3. Before deploying, add these environment variables in **Project Settings → Environment Variables**. Enter secrets only in Vercel; never commit them or paste them into chat or issues.
 
    | Variable | Purpose |
    | --- | --- |
@@ -161,12 +157,17 @@ For a demo, the documented setup uses a separate PostgreSQL provider such as Neo
    | `DATABASE_USERNAME` | Database role |
    | `DATABASE_PASSWORD` | Database password |
    | `JWT_SECRET_BASE64` | Random Base64-encoded secret containing at least 32 bytes |
-   | `SMTP_HOST` | Production email provider host |
-   | `SMTP_USERNAME` | Email provider username |
-   | `SMTP_PASSWORD` | Email provider password |
-   | `AUTH_EMAIL_FROM` | Authorized sender address |
+   | `PUBLIC_BASE_URL` | Public production URL, such as `https://<project>.vercel.app`; used in verification and password-reset links |
+   | `SMTP_HOST` | `smtp.resend.com` |
+   | `SMTP_PORT` | `587` |
+   | `SMTP_USERNAME` | `resend` |
+   | `SMTP_PASSWORD` | Resend API key |
+   | `SMTP_AUTH` | `true` |
+   | `SMTP_STARTTLS` | `true` |
+   | `AUTH_EMAIL_FROM` | Sender address on the verified Resend domain |
+   | `AUTH_COOKIE_SECURE` | `true` |
 
-   The Blueprint defaults SMTP to port `587` with authentication and STARTTLS enabled. Adjust those settings only if your email provider requires different values. Enter secrets directly in Render; never commit them or paste them into issues or chat.
-5. Deploy the Blueprint. Flyway applies the database migrations at startup. Confirm the service health check passes at `/health`, then test account verification, login, barcode lookup, and product saving using the Render URL.
+   Create a Resend account, verify a sending domain, and generate an API key before enabling public account registration. Configure `PUBLIC_BASE_URL` for the production domain. Keep production credentials scoped to the Production environment unless a separate preview database and email setup are intentionally configured.
+4. Deploy the project. Vercel provides `PORT` to the container; the app listens on that port. Flyway applies database migrations at startup. Confirm `https://<project>.vercel.app/health` reports a healthy database, then test email verification, login, barcode lookup, and product saving.
 
-The free Render web service may sleep while idle, so its first request after a quiet period can take longer. A real SMTP provider is required for public account verification and password recovery. See the [backend deployment notes](food-safety-backend/READMEBackend.md#deploy-a-public-demo-on-render) for more detail.
+Vercel scales container instances down when idle, so a first request can have a cold start. Data must be stored in PostgreSQL, not the container filesystem. Review provider limits and retention policies before storing data you need to keep. A real email provider is required for public account verification and password recovery. See the [backend deployment notes](food-safety-backend/READMEBackend.md#deploy-a-public-demo-on-vercel) for more detail.

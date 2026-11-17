@@ -22,7 +22,6 @@ import java.util.Map;
 
 @Service
 public class BarcodeImageService {
-    private static final long MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
     private static final Map<DecodeHintType, Object> DECODE_HINTS = Map.of(
             DecodeHintType.TRY_HARDER, Boolean.TRUE,
             DecodeHintType.POSSIBLE_FORMATS, EnumSet.of(
@@ -41,8 +40,8 @@ public class BarcodeImageService {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A non-empty barcode image is required");
         }
-        if (file.getSize() > MAX_IMAGE_SIZE_BYTES) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image must be 10 MB or smaller");
+        if (file.getSize() > ImageUploadLimits.MAX_IMAGE_SIZE_BYTES) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ImageUploadLimits.MAX_IMAGE_SIZE_MESSAGE);
         }
 
         final BufferedImage image;

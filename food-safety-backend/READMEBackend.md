@@ -92,7 +92,7 @@ docker compose exec postgres psql -U bitewise -d bitewise -c "SELECT id, owner_i
 
 Do not query or share password hashes, action tokens, refresh-token hashes, or access/refresh tokens. Use a disposable local account for testing.
 
-For real email delivery, configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `AUTH_EMAIL_FROM`, and (as required by your provider) `SMTP_AUTH` and `SMTP_STARTTLS`. Set these as environment variables or in a secret manager; never commit SMTP credentials. Use the provider's recommended TLS settings and an authorized sender address.
+For real email delivery, configure [Resend SMTP](https://resend.com/docs/send-with-smtp) on the production backend. Create a Resend account, verify a sending domain, and create an API key. Use `smtp.resend.com` for `SMTP_HOST`, `587` for `SMTP_PORT`, `resend` for `SMTP_USERNAME`, and the API key for `SMTP_PASSWORD`; enable SMTP authentication and STARTTLS. Set `AUTH_EMAIL_FROM` to a sender address on the verified domain. Enter credentials only in the backend host's environment settings; never commit SMTP credentials. For other providers, use their documented SMTP settings and an authorized sender address.
 
 The app connects to PostgreSQL at `localhost:5432` using the development credentials in `compose.yaml`. Override `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` through environment variables for another database or deployment. Never use the development database password or a sample JWT secret in production.
 
@@ -100,21 +100,37 @@ Flyway applies versioned schema migrations automatically at startup; Hibernate v
 
 The API starts at `http://localhost:8080`.
 
-## Deploy a public demo on Render
+## Deploy a public demo on Vercel
 
-The root `render.yaml` deploys the frontend and Spring Boot API together as one Docker web service. The app serves its static pages from the same origin as the API, so login cookies work without cross-origin browser configuration. The service uses Render's free web plan, which can sleep when idle and take about a minute to wake up.
+The root `Dockerfile` builds the Spring Boot application and packages the frontend into the same application. Vercel's [Container Runtime](https://vercel.com/docs/functions/runtimes/container) runs this Dockerfile as a container-backed function, so browser pages and `/api/**` requests share one origin and the refresh cookie works without cross-origin configuration. The runtime is currently in beta, scales instances down when idle, and is subject to Vercel Functions' limits and pricing, including the 4.5 MB request-body limit. Vercel does not provision PostgreSQL for this application.
 
-The Blueprint expects an external PostgreSQL connection. A free Neon Postgres project can be used for a demo; use its pooled host and database name to form `DATABASE_URL` as `jdbc:postgresql://<host>/<database>?sslmode=require`, and provide the database role and password separately as `DATABASE_USERNAME` and `DATABASE_PASSWORD`. Free database plans have provider-specific limits; check Neon’s current terms and keep backups for data you need.
+Create a managed PostgreSQL database (for example, Neon) and use the provider-supported JDBC URL, such as `jdbc:postgresql://<host>/<database>?sslmode=require`. Keep the database role and password in Vercel environment variables. Free database plans have provider-specific limits; review their current terms and keep backups for data you need.
 
 To deploy:
 
-1. Push the repository, including `render.yaml` and `Dockerfile`, to GitHub.
-2. Create a PostgreSQL project with your database provider and prepare its JDBC connection URL.
-3. In the [Render Dashboard](https://dashboard.render.com/), create a Blueprint from the repository and branch.
-4. Provide `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `JWT_SECRET_BASE64`, and production SMTP values (`SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `AUTH_EMAIL_FROM`) when prompted. Generate `JWT_SECRET_BASE64` as random Base64 data decoding to at least 32 bytes. Keep all credentials private. Mailpit is local-only; use a real email provider for account verification and password resets.
-5. After deploy, open the Render service URL. Flyway applies the database migrations automatically; `/health` checks both the app and its database.
+1. Push the repository to GitHub and import it in the [Vercel Dashboard](https://vercel.com/dashboard). Set the project root to the repository root. Vercel should detect the root `Dockerfile`; if it does not, choose the **Container** framework preset.
+2. In **Project Settings → Environment Variables**, configure the following for Production before deploying:
 
-The free Render web service sleeps after inactivity, so the first request after a quiet period may be slow. Configure SMTP before public signup; without it, verification emails cannot be delivered.
+   | Variable | Value or purpose |
+   | --- | --- |
+   | `DATABASE_URL` | PostgreSQL JDBC URL, including provider-required TLS parameters |
+   | `DATABASE_USERNAME` | Database role |
+   | `DATABASE_PASSWORD` | Database password |
+   | `JWT_SECRET_BASE64` | Random Base64 data decoding to at least 32 bytes |
+   | `PUBLIC_BASE_URL` | Production site URL, e.g. `https://<project>.vercel.app` |
+   | `SMTP_HOST` | `smtp.resend.com` |
+   | `SMTP_PORT` | `587` |
+   | `SMTP_USERNAME` | `resend` |
+   | `SMTP_PASSWORD` | Resend API key |
+   | `SMTP_AUTH` | `true` |
+   | `SMTP_STARTTLS` | `true` |
+   | `AUTH_EMAIL_FROM` | Sender address on the verified Resend domain |
+   | `AUTH_COOKIE_SECURE` | `true` |
+
+   Generate `JWT_SECRET_BASE64` from a cryptographically random secret containing at least 32 bytes. In Resend, verify a sending domain and create an API key before enabling public signup. Enter all credentials only in Vercel's environment settings. Do not copy secrets into source files, commits, chat, or issue reports. Mailpit is for local testing only.
+3. Deploy the project. Vercel sets `PORT` for the container, and Spring Boot listens on it. Flyway applies schema migrations on startup. Check `https://<project>.vercel.app/health`; it verifies both the app and its database.
+
+Set `PUBLIC_BASE_URL` to the public production origin so verification and password-reset messages contain working links. Do not enable public email workflows in previews unless you have configured a safe preview URL and isolated test data. Persistent user and product data must stay in PostgreSQL; do not write it to the container filesystem. Configure SMTP before public signup, or verification emails cannot be delivered.
 
 ### Run the browser frontend
 
@@ -188,7 +204,7 @@ Ingredient checks are also recorded in the authenticated user's recent scan hist
 `GET /api/products/{barcode}/analysis?profileId=550e8400-e29b-41d4-a716-446655440000` compares the product's community-contributed allergen tags with the saved profile. Replace the example UUID with an ID returned by `POST /api/profiles`. A profile tag matches whether supplied with or without the language prefix (for example, `milk` matches `en:milk`). Without `profileId`, this endpoint reports the product tags without profile conflict checks.
 
 ### Scan a barcode from an image
-`POST /api/products/scan` accepts a multipart `file` image, decodes a supported product barcode, and returns the matching Open Food Facts product. Supported barcode formats include EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39, ITF, and QR codes. The uploaded image must be 10 MB or smaller, and the barcode must decode to 8–14 digits.
+`POST /api/products/scan` accepts a multipart `file` image, decodes a supported product barcode, and returns the matching Open Food Facts product. Supported barcode formats include EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39, ITF, and QR codes. The uploaded image must be 4 MB or smaller, and the barcode must decode to 8–14 digits. The 4 MB limit keeps the full multipart request below Vercel's 4.5 MB function request-body limit.
 
 PowerShell example:
 
@@ -209,7 +225,7 @@ This scan endpoint only reads the barcode; it does not upload the image to Open 
 These records belong to `auth_users` and are deleted when the account is deleted. Food allergies and dietary restrictions remain attached to `food_profiles`, so users can keep different sets of needs without a second account-level restriction system.
 
 ### Upload a product image
-`POST /api/products/{barcode}/images?imageField=front` accepts a multipart request containing a `file` image. `imageField` may be `front` (default), `ingredients`, `nutrition`, or `other`. JPEG and PNG files up to 10 MB are accepted.
+`POST /api/products/{barcode}/images?imageField=front` accepts a multipart request containing a `file` image. `imageField` may be `front` (default), `ingredients`, `nutrition`, or `other`. JPEG and PNG files up to 4 MB are accepted.
 
 Image uploads are forwarded to Open Food Facts as authenticated contributions. Configure the server environment with an Open Food Facts account before enabling uploads:
 

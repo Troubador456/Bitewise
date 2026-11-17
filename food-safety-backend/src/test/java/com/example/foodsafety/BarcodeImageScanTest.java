@@ -41,4 +41,18 @@ class BarcodeImageScanTest {
 
         assertTrue(exception.getReason().contains("supported image"));
     }
+
+    @Test
+    void rejectsImagesLargerThanTheHostingRequestLimit() {
+        var image = new MockMultipartFile(
+                "file",
+                "large.png",
+                "image/png",
+                new byte[4 * 1024 * 1024 + 1]);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class, () -> service.decode(image));
+
+        assertEquals("Image must be 4 MB or smaller", exception.getReason());
+    }
 }

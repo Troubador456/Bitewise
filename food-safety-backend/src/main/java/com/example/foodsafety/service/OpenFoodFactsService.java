@@ -32,7 +32,6 @@ public class OpenFoodFactsService {
     private static final Pattern BARCODE_PATTERN = Pattern.compile("\\d{8,14}");
     private static final Pattern UPLOAD_FAILURE_PATTERN =
             Pattern.compile("\"status\"\\s*:\\s*0(?:\\s*[,}])");
-    private static final long MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
     private static final byte[] PNG_SIGNATURE = {
             (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
     };
@@ -109,8 +108,8 @@ public class OpenFoodFactsService {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "A non-empty image file is required");
         }
-        if (file.getSize() > MAX_IMAGE_SIZE_BYTES) {
-            throw new ResponseStatusException(BAD_REQUEST, "Image must be 10 MB or smaller");
+        if (file.getSize() > ImageUploadLimits.MAX_IMAGE_SIZE_BYTES) {
+            throw new ResponseStatusException(BAD_REQUEST, ImageUploadLimits.MAX_IMAGE_SIZE_MESSAGE);
         }
 
         final byte[] imageBytes;

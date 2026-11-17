@@ -1,8 +1,10 @@
 package com.example.foodsafety;
 
+import com.example.foodsafety.model.ProductImageField;
 import com.example.foodsafety.service.OpenFoodFactsService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
@@ -71,6 +73,22 @@ class OpenFoodFactsLookupTest {
                 () -> service(RestClient.builder()).getProduct("../not-a-barcode"));
 
         assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    }
+
+    @Test
+    void rejectsProductImagesLargerThanTheHostingRequestLimit() {
+        var service = new OpenFoodFactsService(RestClient.builder(), BASE_URL, "user", "password");
+        var image = new MockMultipartFile(
+                "file",
+                "large.jpg",
+                "image/jpeg",
+                new byte[4 * 1024 * 1024 + 1]);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.uploadImage("0028400642033", ProductImageField.FRONT, image));
+
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Image must be 4 MB or smaller", exception.getReason());
     }
 
     private static OpenFoodFactsService service(RestClient.Builder builder) {
