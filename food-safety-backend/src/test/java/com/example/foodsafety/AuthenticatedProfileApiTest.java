@@ -70,6 +70,13 @@ class AuthenticatedProfileApiTest {
     }
 
     @Test
+    void healthCheckIsPublicAndConfirmsDatabaseConnectivity() throws Exception {
+        mockMvc.perform(get("/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
     void allowsLocalLiveServerOriginToPreflightAuthRequests() throws Exception {
         mockMvc.perform(options("/api/auth/login")
                         .header("Origin", "http://127.0.0.1:5500")

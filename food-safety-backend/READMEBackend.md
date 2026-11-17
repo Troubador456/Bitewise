@@ -100,6 +100,22 @@ Flyway applies versioned schema migrations automatically at startup; Hibernate v
 
 The API starts at `http://localhost:8080`.
 
+## Deploy a public demo on Render
+
+The root `render.yaml` deploys the frontend and Spring Boot API together as one Docker web service. The app serves its static pages from the same origin as the API, so login cookies work without cross-origin browser configuration. The service uses Render's free web plan, which can sleep when idle and take about a minute to wake up.
+
+The Blueprint expects an external PostgreSQL connection. A free Neon Postgres project can be used for a demo; use its pooled host and database name to form `DATABASE_URL` as `jdbc:postgresql://<host>/<database>?sslmode=require`, and provide the database role and password separately as `DATABASE_USERNAME` and `DATABASE_PASSWORD`. Free database plans have provider-specific limits; check Neon’s current terms and keep backups for data you need.
+
+To deploy:
+
+1. Push the repository, including `render.yaml` and `Dockerfile`, to GitHub.
+2. Create a PostgreSQL project with your database provider and prepare its JDBC connection URL.
+3. In the [Render Dashboard](https://dashboard.render.com/), create a Blueprint from the repository and branch.
+4. Provide `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `JWT_SECRET_BASE64`, and production SMTP values (`SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `AUTH_EMAIL_FROM`) when prompted. Generate `JWT_SECRET_BASE64` as random Base64 data decoding to at least 32 bytes. Keep all credentials private. Mailpit is local-only; use a real email provider for account verification and password resets.
+5. After deploy, open the Render service URL. Flyway applies the database migrations automatically; `/health` checks both the app and its database.
+
+The free Render web service sleeps after inactivity, so the first request after a quiet period may be slow. Configure SMTP before public signup; without it, verification emails cannot be delivered.
+
 ### Run the browser frontend
 
 Serve the repository root (`index.html`, `signin.html`, `createaccount.html`, and `home.html`) with VS Code Live Server. Open the Live Server URL, such as `http://127.0.0.1:5500/index.html`; do not open the HTML files directly with a `file://` URL because browser security blocks API requests from that origin. If VS Code Live Server chooses port `5501`, that origin is also allowed by default.

@@ -98,6 +98,24 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/..</directory>
+                <targetPath>static</targetPath>
+                <includes>
+                    <include>index.html</include>
+                    <include>signin.html</include>
+                    <include>createaccount.html</include>
+                    <include>home.html</include>
+                    <include>api-config.js</include>
+                    <include>auth.js</include>
+                    <include>assets/**</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
